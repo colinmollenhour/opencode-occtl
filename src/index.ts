@@ -14,7 +14,9 @@ import { sessionAbortCommand } from "./commands/session-abort.js";
 import { sessionDiffCommand } from "./commands/session-diff.js";
 import { sessionChildrenCommand } from "./commands/session-children.js";
 import { sessionCreateCommand } from "./commands/session-create.js";
+import { sessionShareCommand, sessionUnshareCommand } from "./commands/session-share.js";
 import { sessionWaitForTextCommand } from "./commands/session-wait-for-text.js";
+import { installSkillCommand, viewSkillCommand } from "./commands/skill.js";
 
 const program = new Command();
 
@@ -47,6 +49,12 @@ session.addCommand(sessionTodoCommand());
 session.addCommand(sessionAbortCommand());
 session.addCommand(sessionDiffCommand());
 session.addCommand(sessionChildrenCommand());
+session.addCommand(sessionShareCommand());
+session.addCommand(sessionUnshareCommand());
 session.addCommand(sessionWaitForTextCommand());
+
+// Skill management (top-level)
+program.addCommand(installSkillCommand());
+program.addCommand(viewSkillCommand());
 
 program.parse();

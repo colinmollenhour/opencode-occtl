@@ -24,6 +24,7 @@ occtl session send "fix the bug"          # send a message
 occtl session respond --auto-approve -w   # auto-approve permissions
 occtl session todo                        # view session todo list
 occtl session status                      # check if sessions are busy/idle
+occtl session share                       # share session, get public URL
 ```
 
 The `session` subcommand can be shortened to `s`:
@@ -46,6 +47,8 @@ occtl s list --children         # include child sessions (sub-agents)
 occtl s list --json             # JSON output for scripting
 occtl s list --detailed         # show full details per session
 occtl s list --limit 5          # limit results
+occtl s list --sort created     # sort by: updated (default), created, title
+occtl s list --sort title --asc # sort ascending
 ```
 
 ### Create a Session
@@ -113,12 +116,18 @@ Press Ctrl+C to stop watching.
 occtl s send "your message here"                    # send to most recent session
 occtl s send -s <session-id> "your message"         # send to specific session
 occtl s send --async "do this in background"        # send and return immediately
+occtl s send -w "fix the tests"                     # send, block until idle, show result
 occtl s send --model anthropic/claude-opus-4-6 "hi" # specify model
 occtl s send --agent plan "analyze this code"       # specify agent
 occtl s send --no-reply "context info"              # inject context without AI response
 occtl s send --stdin < prompt.txt                   # read message from stdin
 occtl s send "message" --json                       # JSON response output
 ```
+
+The three send modes:
+- **(default)** — synchronous: blocks on the HTTP request until the agent responds, returns the response.
+- **`--async`** — fire-and-forget: sends and exits immediately. Use with `watch` or `wait-for-text` separately.
+- **`--wait` / `-w`** — hybrid: sends async, blocks until `session.idle` via SSE, then fetches and displays the last assistant message. Best for scripts that need the result but want event-driven waiting.
 
 ### Respond to Permission Requests
 
@@ -187,6 +196,15 @@ occtl s wait-for-text "DONE" --check-existing        # also check existing messa
 ```
 
 Silently watches the SSE stream until a message contains the given text, then outputs everything after that text and exits 0. Exits 1 on timeout. Useful for automation scripts that need to block until the agent signals completion.
+
+### Share / Unshare
+
+```bash
+occtl s share                             # share most recent session, print URL
+occtl s share <session-id>                # share a specific session
+occtl s share --json                      # full JSON output
+occtl s unshare <session-id>              # remove sharing
+```
 
 ### List Child Sessions
 
@@ -423,3 +441,5 @@ context, so you MUST read the current state from the filesystem.
 - **Inspect between iterations.** Unlike a raw bash loop, `occtl` lets you `occtl s last`, `occtl s todo`, and `occtl s diff` between iterations to observe what the agent actually did.
 - **Set a timeout.** Always use `--timeout` with `wait-for-text` to prevent infinite hangs if the agent gets stuck or never produces the completion signal.
 - **Progress file as memory.** The agent has no memory across iterations. The `progress.txt` file IS its memory. Keep it concise — append summaries, not full transcripts.
+- **Use `send --wait` for simpler loops.** If you don't need completion signals and just want to block until the agent finishes, `occtl s send -w` is simpler than `send --async` + `wait-for-text`. It sends the message, blocks until `session.idle`, and prints the last assistant message.
+- **`session delete` lives in `opencode`.** Use `opencode session delete <id>` to clean up sessions after a Ralph loop. This was intentionally not duplicated in `occtl`.

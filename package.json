@@ -6,14 +6,32 @@
   "bin": {
     "occtl": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "SKILL.md",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "tsc",
     "dev": "tsx src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["opencode", "cli", "session", "automation"],
-  "author": "",
+  "keywords": [
+    "opencode",
+    "cli",
+    "session",
+    "automation",
+    "ralph-loop",
+    "ai-agent",
+    "orchestration"
+  ],
+  "author": "Colin Mollenhour",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/colinmollenhour/occtl"
+  },
   "dependencies": {
     "@opencode-ai/sdk": "^1.3.0",
     "commander": "^14.0.0"

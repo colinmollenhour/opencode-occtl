@@ -2,6 +2,7 @@ import { Command } from "commander";
 import path from "path";
 import { ensureServer } from "../client.js";
 import { formatSession, formatSessionDetailed, formatJSON } from "../format.js";
+import type { Session } from "@opencode-ai/sdk";
 
 export function sessionListCommand(): Command {
   return new Command("list")
@@ -15,19 +16,22 @@ export function sessionListCommand(): Command {
     .option("-n, --limit <n>", "Limit number of results", parseInt)
     .option("-a, --all", "Show sessions for all directories")
     .option("-c, --children", "Include child sessions (sub-agents)")
+    .option(
+      "--sort <field>",
+      "Sort by: updated (default), created, title",
+      "updated"
+    )
+    .option("--asc", "Sort ascending instead of descending")
     .action(async (directory: string | undefined, opts) => {
       const client = await ensureServer();
 
       // Determine which directory to filter by
       let filterDir: string | undefined;
       if (opts.all) {
-        // No directory filter
         filterDir = undefined;
       } else if (directory) {
-        // Explicit directory argument — resolve to absolute path
         filterDir = path.resolve(directory);
       } else {
-        // Default: current working directory
         filterDir = process.cwd();
       }
 
@@ -36,8 +40,7 @@ export function sessionListCommand(): Command {
       });
       let sessions = result.data ?? [];
 
-      // Client-side directory filtering as fallback in case the server
-      // doesn't honour the query param (older versions)
+      // Client-side directory filtering as fallback
       if (filterDir) {
         sessions = sessions.filter((s) => s.directory === filterDir);
       }
@@ -46,6 +49,26 @@ export function sessionListCommand(): Command {
       if (!opts.children) {
         sessions = sessions.filter((s) => !s.parentID);
       }
+
+      // Sort
+      const sortField = opts.sort as string;
+      const ascending = !!opts.asc;
+      sessions.sort((a: Session, b: Session) => {
+        let cmp = 0;
+        switch (sortField) {
+          case "created":
+            cmp = b.time.created - a.time.created;
+            break;
+          case "title":
+            cmp = (a.title || "").localeCompare(b.title || "");
+            break;
+          case "updated":
+          default:
+            cmp = b.time.updated - a.time.updated;
+            break;
+        }
+        return ascending ? -cmp : cmp;
+      });
 
       // Apply limit
       if (opts.limit && opts.limit > 0) {

@@ -1,7 +1,8 @@
 import { Command } from "commander";
 import { ensureServer } from "../client.js";
-import { formatMessage, formatJSON } from "../format.js";
+import { formatMessage, formatJSON, extractText } from "../format.js";
 import { resolveSession } from "../resolve.js";
+import { streamEvents } from "../sse.js";
 
 export function sessionSendCommand(): Command {
   return new Command("send")
@@ -14,6 +15,10 @@ export function sessionSendCommand(): Command {
     .option("-t, --text-only", "Show only text content in response")
     .option("--no-reply", "Send as context injection (no AI response)")
     .option("--async", "Send async and return immediately")
+    .option(
+      "-w, --wait",
+      "Send async, block until session is idle, then show the last message"
+    )
     .option("--agent <agent>", "Agent to use")
     .option("--model <model>", "Model to use (format: provider/model)")
     .option("--stdin", "Read message from stdin instead of arguments")
@@ -23,7 +28,6 @@ export function sessionSendCommand(): Command {
 
       let messageText: string;
       if (opts.stdin) {
-        // Read from stdin
         const chunks: Buffer[] = [];
         for await (const chunk of process.stdin) {
           chunks.push(chunk);
@@ -47,28 +51,67 @@ export function sessionSendCommand(): Command {
         }
       }
 
+      const body = {
+        parts: [{ type: "text" as const, text: messageText }],
+        ...(model && { model }),
+        ...(opts.agent && { agent: opts.agent }),
+        ...(opts.reply === false && { noReply: true }),
+      };
+
+      // --async: fire and forget
       if (opts.async) {
         await client.session.promptAsync({
           path: { id: resolved },
-          body: {
-            parts: [{ type: "text", text: messageText }],
-            ...(model && { model }),
-            ...(opts.agent && { agent: opts.agent }),
-            ...(opts.reply === false && { noReply: true }),
-          },
+          body,
         });
         console.log("Message sent (async).");
         return;
       }
 
+      // --wait: send async, then block until session.idle, then show result
+      if (opts.wait) {
+        await client.session.promptAsync({
+          path: { id: resolved },
+          body,
+        });
+
+        // Block until the session goes idle
+        await streamEvents(resolved, (event) => {
+          if (event.type === "session.idle") {
+            return "stop";
+          }
+        });
+
+        // Fetch and display the last assistant message
+        const msgs = await client.session.messages({
+          path: { id: resolved },
+        });
+        const messages = msgs.data ?? [];
+        const last = messages.filter((m) => m.info.role === "assistant").pop();
+        if (!last) {
+          console.error("No assistant response found.");
+          process.exit(1);
+        }
+
+        if (opts.json) {
+          console.log(formatJSON(last));
+          return;
+        }
+
+        const textOnly = opts.verbose ? false : (opts.textOnly !== false);
+        console.log(
+          formatMessage(last.info, last.parts, {
+            verbose: opts.verbose,
+            textOnly,
+          })
+        );
+        return;
+      }
+
+      // Default: synchronous send (blocks until response)
       const result = await client.session.prompt({
         path: { id: resolved },
-        body: {
-          parts: [{ type: "text", text: messageText }],
-          ...(model && { model }),
-          ...(opts.agent && { agent: opts.agent }),
-          ...(opts.reply === false && { noReply: true }),
-        },
+        body,
       });
 
       if (!result.data) {
