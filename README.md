@@ -14,30 +14,27 @@ npm install -g occtl
 
 ```bash
 # List sessions for the current directory
-occtl session list
+occtl list
 
 # Get the last assistant message
-occtl session last
+occtl last
 
 # Watch a session stream in real-time
-occtl session watch --text-only
+occtl watch --text-only
 
 # Send a prompt and wait for the response
-occtl session send "fix the failing tests"
+occtl send "fix the failing tests"
 
 # Auto-approve all permission requests
-occtl session respond --auto-approve --wait
+occtl respond --auto-approve --wait
 
 # Run a task in an isolated worktree
 occtl worktree run auth -w "implement JWT authentication"
 ```
 
-The `session` subcommand can be shortened to `s`, `worktree` to `wt`:
+`worktree` can be shortened to `wt`:
 
 ```bash
-occtl s ls
-occtl s last
-occtl s send -w "refactor the auth module"
 occtl wt run payments -w "add Stripe checkout"
 ```
 
@@ -52,44 +49,32 @@ export OPENCODE_SERVER_PORT=4096
 
 ## Commands
 
-### Session Commands
-
 | Command | Description |
 |---------|-------------|
-| `session list` | List sessions (filters by cwd, supports `--all`, path arg, `--sort`, `--asc`) |
-| `session create` | Create a new session (`-q` for just the ID, `-t` for title) |
-| `session get` | Get detailed session info |
-| `session messages` | List messages (`--role`, `--limit`, `--text-only`, `--verbose`) |
-| `session last` | Get the last message (text-only by default) |
-| `session status` | Check session status (idle/busy/retry) |
-| `session watch` | Watch session events via SSE (`--text-only`, `--json`, `--events`) |
-| `session send` | Send a message (`--async`, `--wait`, `--model`, `--agent`, `--stdin`) |
-| `session respond` | Respond to permission requests (`--auto-approve`, `--wait`) |
-| `session todo` | View the session's todo list |
-| `session abort` | Abort a running session |
-| `session diff` | Show file changes in a session |
-| `session children` | List child sessions (sub-agents) |
-| `session share` | Share a session and get a public URL |
-| `session unshare` | Remove sharing from a session |
-| `session wait-for-text` | Block until a message contains given text, then exit 0 |
-| `session wait-for-idle` | Block until a session goes idle |
-| `session wait-any` | Wait for first of N sessions to go idle, output its ID |
-| `session is-idle` | Non-blocking idle check (exit 0=idle, 1=busy) |
-| `session summary` | Compact overview: status, todos, cost, last message snippet |
-
-### Worktree Commands
-
-| Command | Description |
-|---------|-------------|
+| `list` | List sessions (filters by cwd, supports `--all`, path arg, `--sort`, `--asc`) |
+| `create` | Create a new session (`-q` for just the ID, `-t` for title) |
+| `get` | Get detailed session info |
+| `messages` | List messages (`--role`, `--limit`, `--text-only`, `--verbose`) |
+| `last` | Get the last message (text-only by default) |
+| `status` | Check session status (idle/busy/retry) |
+| `watch` | Watch session events via SSE (`--text-only`, `--json`, `--events`) |
+| `send` | Send a message (`--async`, `--wait`, `--model`, `--agent`, `--stdin`) |
+| `respond` | Respond to permission requests (`--auto-approve`, `--wait`) |
+| `todo` | View the session's todo list |
+| `abort` | Abort a running session |
+| `diff` | Show file changes in a session |
+| `children` | List child sessions (sub-agents) |
+| `share` | Share a session and get a public URL |
+| `unshare` | Remove sharing from a session |
+| `wait-for-text` | Block until a message contains given text, then exit 0 |
+| `wait-for-idle` | Block until a session goes idle |
+| `wait-any` | Wait for first of N sessions to go idle, output its ID |
+| `is-idle` | Non-blocking idle check (exit 0=idle, 1=busy) |
+| `summary` | Compact overview: status, todos, cost, last message snippet |
 | `worktree list` | List git worktrees |
 | `worktree create` | Create a worktree with branch and optional session |
 | `worktree remove` | Remove a worktree |
 | `worktree run` | Create worktree + session + send prompt (one-liner) |
-
-### Other Commands
-
-| Command | Description |
-|---------|-------------|
 | `install-skill` | Install the occtl skill as an OpenCode user-level skill |
 | `view-skill` | Display the bundled SKILL.md |
 
@@ -101,13 +86,13 @@ All commands support `--json` for machine-readable output.
 
 ```bash
 # Default: synchronous, blocks until the agent responds
-occtl s send "fix the bug"
+occtl send "fix the bug"
 
 # Async: fire and forget
-occtl s send --async "fix the bug"
+occtl send --async "fix the bug"
 
 # Wait: send async, block until session idle, show result
-occtl s send --wait "fix the bug"
+occtl send --wait "fix the bug"
 ```
 
 ## Worktrees
@@ -159,28 +144,28 @@ The [Ralph Loop](https://ghuntley.com/ralph/) is an autonomous coding pattern wh
 To start: tell your agent "Use the occtl skill to complete project X using Ralph Mode." The skill teaches the agent to:
 
 1. Break work into atomic tasks (`tasks.md`)
-2. Create a fresh session per task (`occtl s create`)
-3. Send the worker a prompt with context (`occtl s send --async`)
-4. Wait for completion (`occtl s wait-for-idle`)
-5. Evaluate output (`occtl s summary`, `occtl s last`)
+2. Create a fresh session per task (`occtl create`)
+3. Send the worker a prompt with context (`occtl send --async`)
+4. Wait for completion (`occtl wait-for-idle`)
+5. Evaluate output (`occtl summary`, `occtl last`)
 6. Repeat until all tasks are done
 
 ### Parallel Execution
 
 ```bash
 # Agent creates 3 sessions for independent tasks
-SID1=$(occtl s create -q -t "task-auth")
-SID2=$(occtl s create -q -t "task-payments")
-SID3=$(occtl s create -q -t "task-dashboard")
+SID1=$(occtl create -q -t "task-auth")
+SID2=$(occtl create -q -t "task-payments")
+SID3=$(occtl create -q -t "task-dashboard")
 
 # Sends prompts to all three
-occtl s send --async "implement JWT auth..." -s $SID1
-occtl s send --async "add Stripe checkout..." -s $SID2
-occtl s send --async "build dashboard..." -s $SID3
+occtl send --async "implement JWT auth..." -s $SID1
+occtl send --async "add Stripe checkout..." -s $SID2
+occtl send --async "build dashboard..." -s $SID3
 
 # Waits for first to finish, evaluates, dispatches next
-DONE=$(occtl s wait-any $SID1 $SID2 $SID3)
-occtl s summary $DONE
+DONE=$(occtl wait-any $SID1 $SID2 $SID3)
+occtl summary $DONE
 ```
 
 For conflicting work, use worktrees:
@@ -201,10 +186,10 @@ You're working in a normal OpenCode session — maybe a big refactor that's half
 > "The session ses_abc123 is working on a refactor. When it finishes, use occtl to have it create a pull request, then monitor the CI pipeline. If the pipeline fails, read the failure logs and send the session a prompt to fix the issues. Keep going until the pipeline passes."
 
 The supervisory agent uses:
-- `occtl s wait-for-idle ses_abc123` — block until the worker finishes
-- `occtl s send -w "create a PR for this work" -s ses_abc123` — tell it to make a PR
-- `occtl s last ses_abc123` — read the PR URL from its output
-- `occtl s send -w "the CI pipeline failed with: ... fix it" -s ses_abc123` — feed it failures
+- `occtl wait-for-idle ses_abc123` — block until the worker finishes
+- `occtl send -w "create a PR for this work" -s ses_abc123` — tell it to make a PR
+- `occtl last ses_abc123` — read the PR URL from its output
+- `occtl send -w "the CI pipeline failed with: ... fix it" -s ses_abc123` — feed it failures
 - Loop until the pipeline is green
 
 You come back in the morning to a merged PR.
@@ -215,10 +200,10 @@ A session can review another session's work:
 
 > "Use occtl to watch for any session in this project that goes idle. When one does, read its diff and last message. If it made code changes, create a new session to review the changes and post review comments."
 
-- `occtl s list --json` — find active sessions
-- `occtl s wait-any <ids...>` — wait for any to finish
-- `occtl s diff <id>` — see what files changed
-- `occtl s create` + `occtl s send` — start a review session with the diff as context
+- `occtl list --json` — find active sessions
+- `occtl wait-any <ids...>` — wait for any to finish
+- `occtl diff <id>` — see what files changed
+- `occtl create` + `occtl send` — start a review session with the diff as context
 
 ### Parallel Test Matrix
 
@@ -227,9 +212,9 @@ Run the same change against different test configurations:
 > "Create 3 worktrees. In each one, send a session to run the test suite with a different Node version (18, 20, 22). Wait for all three to finish and report which ones passed."
 
 - `occtl wt create node18` / `node20` / `node22`
-- `occtl s send --async` to each with the appropriate test command
-- `occtl s wait-any` repeatedly until all three are idle
-- `occtl s summary` each to check results
+- `occtl send --async` to each with the appropriate test command
+- `occtl wait-any` repeatedly until all three are idle
+- `occtl summary` each to check results
 
 ### Continuous Integration Helper
 
@@ -237,8 +222,8 @@ Wire `occtl` into your CI pipeline to have an agent fix failures:
 
 ```bash
 # In CI, after a failure:
-SID=$(occtl s create -q -t "ci-fix-$(date +%s)")
-occtl s send -w "The CI build failed. Here's the log: $(cat ci-output.log)
+SID=$(occtl create -q -t "ci-fix-$(date +%s)")
+occtl send -w "The CI build failed. Here's the log: $(cat ci-output.log)
 Fix the issues and commit." -s $SID
 ```
 
@@ -248,9 +233,9 @@ Move context from one session to another when a session gets too large:
 
 > "Read the last 5 messages from ses_old using occtl, create a fresh session, and send it a summary of the prior work so it can continue."
 
-- `occtl s messages ses_old --limit 5 --text-only` — extract recent context
-- `occtl s create -q` — fresh session
-- `occtl s send --async "Continue the work. Here's what was done: ..."` — seed the new session
+- `occtl messages ses_old --limit 5 --text-only` — extract recent context
+- `occtl create -q` — fresh session
+- `occtl send --async "Continue the work. Here's what was done: ..."` — seed the new session
 
 ## Why Not Just Use opencode CLI?
 

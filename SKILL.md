@@ -15,24 +15,16 @@ description: Manage OpenCode sessions from the CLI using occtl. Use when the use
 ## Quick Reference
 
 ```bash
-occtl session create -q                   # create a new session, print its ID
-occtl session list                        # list all sessions
-occtl session last                        # last message from most recent session
-occtl session messages <id>               # all messages in a session
-occtl session watch <id> --text-only      # stream text in real-time
-occtl session send "fix the bug"          # send a message
-occtl session respond --auto-approve -w   # auto-approve permissions
-occtl session todo                        # view session todo list
-occtl session status                      # check if sessions are busy/idle
-occtl session share                       # share session, get public URL
-```
-
-The `session` subcommand can be shortened to `s`:
-
-```bash
-occtl s ls          # list sessions
-occtl s last        # last message
-occtl s msgs        # messages
+occtl create -q                   # create a new session, print its ID
+occtl list                        # list all sessions
+occtl last                        # last message from most recent session
+occtl messages <id>               # all messages in a session
+occtl watch <id> --text-only      # stream text in real-time
+occtl send "fix the bug"          # send a message
+occtl respond --auto-approve -w   # auto-approve permissions
+occtl todo                        # view session todo list
+occtl status                      # check if sessions are busy/idle
+occtl share                       # share session, get public URL
 ```
 
 ## Commands
@@ -40,58 +32,58 @@ occtl s msgs        # messages
 ### List Sessions
 
 ```bash
-occtl s list                    # sessions for current directory only (default)
-occtl s list --all              # sessions for ALL directories
-occtl s list /path/to/project   # sessions for a specific directory
-occtl s list --children         # include child sessions (sub-agents)
-occtl s list --json             # JSON output for scripting
-occtl s list --detailed         # show full details per session
-occtl s list --limit 5          # limit results
-occtl s list --sort created     # sort by: updated (default), created, title
-occtl s list --sort title --asc # sort ascending
+occtl list                    # sessions for current directory only (default)
+occtl list --all              # sessions for ALL directories
+occtl list /path/to/project   # sessions for a specific directory
+occtl list --children         # include child sessions (sub-agents)
+occtl list --json             # JSON output for scripting
+occtl list --detailed         # show full details per session
+occtl list --limit 5          # limit results
+occtl list --sort created     # sort by: updated (default), created, title
+occtl list --sort title --asc # sort ascending
 ```
 
 ### Create a Session
 
 ```bash
-occtl s create                          # create a new session
-occtl s create -t "my feature work"     # with a title
-occtl s create -q                       # quiet mode: only output the session ID
-occtl s create --json                   # full JSON output
-occtl s create -p <parent-id>           # create a child session
+occtl create                          # create a new session
+occtl create -t "my feature work"     # with a title
+occtl create -q                       # quiet mode: only output the session ID
+occtl create --json                   # full JSON output
+occtl create -p <parent-id>           # create a child session
 ```
 
-The `-q` flag is useful in scripts: `SID=$(occtl s create -q)`
+The `-q` flag is useful in scripts: `SID=$(occtl create -q)`
 
 ### Get Session Details
 
 ```bash
-occtl s get <session-id>        # detailed info about a session
-occtl s get <session-id> --json
+occtl get <session-id>        # detailed info about a session
+occtl get <session-id> --json
 ```
 
 ### Read Messages
 
 ```bash
-occtl s messages                          # all messages from most recent session
-occtl s messages <session-id>             # all messages from specific session
-occtl s messages <id> --role user         # only user messages
-occtl s messages <id> --role assistant    # only assistant messages
-occtl s messages <id> --limit 5           # last 5 messages
-occtl s messages <id> --text-only         # text content only
-occtl s messages <id> --verbose           # include tool call details
-occtl s messages <id> --json              # full JSON output
+occtl messages                          # all messages from most recent session
+occtl messages <session-id>             # all messages from specific session
+occtl messages <id> --role user         # only user messages
+occtl messages <id> --role assistant    # only assistant messages
+occtl messages <id> --limit 5           # last 5 messages
+occtl messages <id> --text-only         # text content only
+occtl messages <id> --verbose           # include tool call details
+occtl messages <id> --json              # full JSON output
 ```
 
 ### Get Last Message
 
 ```bash
-occtl s last                              # last message (text-only by default)
-occtl s last <session-id>                 # from specific session
-occtl s last --role user                  # last user message
-occtl s last --role assistant             # last assistant message
-occtl s last --verbose                    # include tool calls and metadata
-occtl s last --json                       # full JSON output
+occtl last                              # last message (text-only by default)
+occtl last <session-id>                 # from specific session
+occtl last --role user                  # last user message
+occtl last --role assistant             # last assistant message
+occtl last --verbose                    # include tool calls and metadata
+occtl last --json                       # full JSON output
 ```
 
 ### Watch Session (Real-Time)
@@ -99,11 +91,11 @@ occtl s last --json                       # full JSON output
 Connects to the SSE event stream and displays events for a session:
 
 ```bash
-occtl s watch                             # watch most recent session
-occtl s watch <session-id>                # watch specific session
-occtl s watch --text-only                 # stream only text content as it arrives
-occtl s watch --json                      # output each event as JSON line
-occtl s watch --events message.updated,session.idle  # filter event types
+occtl watch                             # watch most recent session
+occtl watch <session-id>                # watch specific session
+occtl watch --text-only                 # stream only text content as it arrives
+occtl watch --json                      # output each event as JSON line
+occtl watch --events message.updated,session.idle  # filter event types
 ```
 
 Event types shown: `message.updated`, `message.part.updated` (text deltas, tool calls), `session.status`, `session.idle`, `permission.updated`, `todo.updated`, `session.error`.
@@ -113,15 +105,15 @@ Press Ctrl+C to stop watching.
 ### Send Messages
 
 ```bash
-occtl s send "your message here"                    # send to most recent session
-occtl s send -s <session-id> "your message"         # send to specific session
-occtl s send --async "do this in background"        # send and return immediately
-occtl s send -w "fix the tests"                     # send, block until idle, show result
-occtl s send --model anthropic/claude-opus-4-6 "hi" # specify model
-occtl s send --agent plan "analyze this code"       # specify agent
-occtl s send --no-reply "context info"              # inject context without AI response
-occtl s send --stdin < prompt.txt                   # read message from stdin
-occtl s send "message" --json                       # JSON response output
+occtl send "your message here"                    # send to most recent session
+occtl send -s <session-id> "your message"         # send to specific session
+occtl send --async "do this in background"        # send and return immediately
+occtl send -w "fix the tests"                     # send, block until idle, show result
+occtl send --model anthropic/claude-opus-4-6 "hi" # specify model
+occtl send --agent plan "analyze this code"       # specify agent
+occtl send --no-reply "context info"              # inject context without AI response
+occtl send --stdin < prompt.txt                   # read message from stdin
+occtl send "message" --json                       # JSON response output
 ```
 
 The three send modes:
@@ -133,24 +125,24 @@ The three send modes:
 
 ```bash
 # Respond to a specific permission
-occtl s respond <session-id> -p <permission-id> -r once
+occtl respond <session-id> -p <permission-id> -r once
 
 # Wait for and respond to the next permission request
-occtl s respond <session-id> --wait -r always
+occtl respond <session-id> --wait -r always
 
 # Auto-approve all permissions continuously (for automation)
-occtl s respond <session-id> --auto-approve --wait
+occtl respond <session-id> --auto-approve --wait
 
 # Response options: once, always, reject
-occtl s respond -r reject -p <permission-id>
+occtl respond -r reject -p <permission-id>
 ```
 
 ### View Todos
 
 ```bash
-occtl s todo                              # todos from most recent session
-occtl s todo <session-id>                 # todos from specific session
-occtl s todo --json                       # JSON output
+occtl todo                              # todos from most recent session
+occtl todo <session-id>                 # todos from specific session
+occtl todo --json                       # JSON output
 ```
 
 Output format:
@@ -164,9 +156,9 @@ Output format:
 ### Check Session Status
 
 ```bash
-occtl s status                            # all session statuses
-occtl s status <session-id>               # specific session status
-occtl s status --json                     # JSON output
+occtl status                            # all session statuses
+occtl status <session-id>               # specific session status
+occtl status --json                     # JSON output
 ```
 
 Status types: `idle`, `busy`, `retry`.
@@ -174,25 +166,25 @@ Status types: `idle`, `busy`, `retry`.
 ### Abort a Session
 
 ```bash
-occtl s abort                             # abort most recent session
-occtl s abort <session-id>                # abort specific session
+occtl abort                             # abort most recent session
+occtl abort <session-id>                # abort specific session
 ```
 
 ### View Diffs
 
 ```bash
-occtl s diff                              # file changes from most recent session
-occtl s diff <session-id>                 # file changes from specific session
-occtl s diff --json                       # JSON output
+occtl diff                              # file changes from most recent session
+occtl diff <session-id>                 # file changes from specific session
+occtl diff --json                       # JSON output
 ```
 
 ### Wait for Text
 
 ```bash
-occtl s wait-for-text "SOME_TEXT"                    # wait on most recent session
-occtl s wait-for-text "SOME_TEXT" <session-id>       # wait on specific session
-occtl s wait-for-text "DONE" --timeout 300           # timeout after 5 minutes (exit 1)
-occtl s wait-for-text "DONE" --check-existing        # also check existing messages first
+occtl wait-for-text "SOME_TEXT"                    # wait on most recent session
+occtl wait-for-text "SOME_TEXT" <session-id>       # wait on specific session
+occtl wait-for-text "DONE" --timeout 300           # timeout after 5 minutes (exit 1)
+occtl wait-for-text "DONE" --check-existing        # also check existing messages first
 ```
 
 Silently watches the SSE stream until a message contains the given text, then outputs everything after that text and exits 0. Exits 1 on timeout. Useful for automation scripts that need to block until the agent signals completion.
@@ -200,9 +192,9 @@ Silently watches the SSE stream until a message contains the given text, then ou
 ### Wait for Idle
 
 ```bash
-occtl s wait-for-idle                     # block until most recent session is idle
-occtl s wait-for-idle <session-id>        # block until specific session is idle
-occtl s wait-for-idle --timeout 300       # timeout after 5 minutes (exit 1)
+occtl wait-for-idle                     # block until most recent session is idle
+occtl wait-for-idle <session-id>        # block until specific session is idle
+occtl wait-for-idle --timeout 300       # timeout after 5 minutes (exit 1)
 ```
 
 Blocks until the session goes idle. Does a quick status check first — if already idle, exits immediately. Otherwise watches the SSE stream. Exit 0 = idle, exit 1 = timeout.
@@ -210,9 +202,9 @@ Blocks until the session goes idle. Does a quick status check first — if alrea
 ### Wait Any (Multiple Sessions)
 
 ```bash
-occtl s wait-any <id1> <id2> <id3>        # wait for FIRST to go idle, output its ID
-occtl s wait-any <id1> <id2> --timeout 600
-occtl s wait-any <id1> <id2> --json       # {"sessionID": "...", "reason": "idle"}
+occtl wait-any <id1> <id2> <id3>        # wait for FIRST to go idle, output its ID
+occtl wait-any <id1> <id2> --timeout 600
+occtl wait-any <id1> <id2> --json       # {"sessionID": "...", "reason": "idle"}
 ```
 
 Watches multiple sessions simultaneously. Outputs the session ID of the first one to go idle and exits. Essential for orchestrating parallel workloads.
@@ -220,9 +212,9 @@ Watches multiple sessions simultaneously. Outputs the session ID of the first on
 ### Is Idle (Non-Blocking Check)
 
 ```bash
-occtl s is-idle                           # exit 0 if idle, exit 1 if busy
-occtl s is-idle <session-id>
-occtl s is-idle --json                    # {"sessionID": "...", "idle": true, "status": "idle"}
+occtl is-idle                           # exit 0 if idle, exit 1 if busy
+occtl is-idle <session-id>
+occtl is-idle --json                    # {"sessionID": "...", "idle": true, "status": "idle"}
 ```
 
 Non-blocking check. Useful for conditional logic in agent orchestration.
@@ -230,10 +222,10 @@ Non-blocking check. Useful for conditional logic in agent orchestration.
 ### Session Summary
 
 ```bash
-occtl s summary                           # compact summary of most recent session
-occtl s summary <session-id>
-occtl s summary --json                    # machine-readable summary
-occtl s summary -n 500                    # longer last-message snippet (default: 200 chars)
+occtl summary                           # compact summary of most recent session
+occtl summary <session-id>
+occtl summary --json                    # machine-readable summary
+occtl summary -n 500                    # longer last-message snippet (default: 200 chars)
 ```
 
 Shows status, todo progress, total cost, file changes, and a snippet of the last assistant message — all in one call. Designed for orchestration agents that need a quick overview without reading full message history.
@@ -241,18 +233,18 @@ Shows status, todo progress, total cost, file changes, and a snippet of the last
 ### Share / Unshare
 
 ```bash
-occtl s share                             # share most recent session, print URL
-occtl s share <session-id>                # share a specific session
-occtl s share --json                      # full JSON output
-occtl s unshare <session-id>              # remove sharing
+occtl share                             # share most recent session, print URL
+occtl share <session-id>                # share a specific session
+occtl share --json                      # full JSON output
+occtl unshare <session-id>              # remove sharing
 ```
 
 ### List Child Sessions
 
 ```bash
-occtl s children                          # children of most recent session
-occtl s children <session-id>             # children of specific session
-occtl s children --json                   # JSON output
+occtl children                          # children of most recent session
+occtl children <session-id>             # children of specific session
+occtl children --json                   # JSON output
 ```
 
 ## Session ID Resolution
@@ -329,9 +321,9 @@ occtl wt run dashboard "build analytics dashboard" &
 wait
 
 # Check status of each
-occtl s ls /path/to/repo/.occtl/worktrees/auth
-occtl s ls /path/to/repo/.occtl/worktrees/payments
-occtl s ls /path/to/repo/.occtl/worktrees/dashboard
+occtl ls /path/to/repo/.occtl/worktrees/auth
+occtl ls /path/to/repo/.occtl/worktrees/payments
+occtl ls /path/to/repo/.occtl/worktrees/dashboard
 
 # When done, review diffs and merge
 for wt in auth payments dashboard; do
@@ -357,7 +349,7 @@ for feature in "${FEATURES[@]}"; do
     WT_PATH=$(occtl wt create "$feature" -q)
 
     for i in $(seq 1 10); do
-      SID=$(occtl s create -q -t "ralph-${feature}-$i")
+      SID=$(occtl create -q -t "ralph-${feature}-$i")
 
       PROMPT="$(cat "prompts/${feature}.md")
 
@@ -366,16 +358,16 @@ $(cat "${WT_PATH}/progress.txt" 2>/dev/null || echo 'Starting fresh.')
 
 When done, output RALPH_DONE. If ALL tasks are complete, output ALL_TASKS_COMPLETE."
 
-      occtl s send --async "$PROMPT" -s "$SID"
-      occtl s respond "$SID" --auto-approve --wait &
+      occtl send --async "$PROMPT" -s "$SID"
+      occtl respond "$SID" --auto-approve --wait &
       APID=$!
 
-      occtl s wait-for-text "RALPH_DONE" "$SID" --timeout 600 || true
+      occtl wait-for-text "RALPH_DONE" "$SID" --timeout 600 || true
       kill $APID 2>/dev/null || true
 
-      occtl s last "$SID" >> "${WT_PATH}/progress.txt"
+      occtl last "$SID" >> "${WT_PATH}/progress.txt"
 
-      if occtl s wait-for-text "ALL_TASKS_COMPLETE" "$SID" \
+      if occtl wait-for-text "ALL_TASKS_COMPLETE" "$SID" \
            --check-existing --timeout 1; then
         echo "=== $feature complete ==="
         break
@@ -394,13 +386,13 @@ echo "All features complete. Review worktrees and merge."
 
 ```bash
 # Run in background to auto-approve all permission requests
-occtl s respond --auto-approve --wait &
+occtl respond --auto-approve --wait &
 ```
 
 ### Poll session until idle
 
 ```bash
-while [ "$(occtl s status <id> --json | jq -r '.type')" = "busy" ]; do
+while [ "$(occtl status <id> --json | jq -r '.type')" = "busy" ]; do
   sleep 2
 done
 echo "Session is idle"
@@ -409,21 +401,21 @@ echo "Session is idle"
 ### Send message and capture response
 
 ```bash
-response=$(occtl s send "what files were changed?" --json)
+response=$(occtl send "what files were changed?" --json)
 echo "$response" | jq -r '.parts[] | select(.type == "text") | .text'
 ```
 
 ### Watch for text output and pipe it
 
 ```bash
-occtl s watch <id> --text-only | tee session-output.txt
+occtl watch <id> --text-only | tee session-output.txt
 ```
 
 ### Chain send + watch for async workflows
 
 ```bash
-occtl s send --async "refactor the auth module"
-occtl s watch --text-only
+occtl send --async "refactor the auth module"
+occtl watch --text-only
 ```
 
 ## JSON Output
@@ -480,27 +472,27 @@ session. It should tell the worker to:
 
 ```bash
 # Create a fresh session
-occtl s create -q -t "ralph-iteration-N"
+occtl create -q -t "ralph-iteration-N"
 # Returns: ses_xxxxx
 
 # Send the prompt (async so you don't block)
-occtl s send --async "$(cat PROMPT.md)" -s ses_xxxxx
+occtl send --async "$(cat PROMPT.md)" -s ses_xxxxx
 
 # Auto-approve permissions for this session
-occtl s respond ses_xxxxx --auto-approve --wait
+occtl respond ses_xxxxx --auto-approve --wait
 # (this runs in background via the shell — use & in bash)
 
 # Wait for the session to finish
-occtl s wait-for-idle ses_xxxxx --timeout 600
+occtl wait-for-idle ses_xxxxx --timeout 600
 
 # Check what happened
-occtl s summary ses_xxxxx
-occtl s last ses_xxxxx
-occtl s todo ses_xxxxx
+occtl summary ses_xxxxx
+occtl last ses_xxxxx
+occtl todo ses_xxxxx
 ```
 
 **5. Evaluate and decide.** After each iteration:
-- Read the worker's output with `occtl s last ses_xxxxx`
+- Read the worker's output with `occtl last ses_xxxxx`
 - Check `tasks.md` to see what was marked done
 - Check `progress.txt` for the worker's notes
 - If the task failed or was only partially done, adjust the next prompt
@@ -513,18 +505,18 @@ occtl s todo ses_xxxxx
 
 | What you need to do | Command |
 |---|---|
-| Create a fresh session | `occtl s create -q -t "ralph-N"` |
-| Send prompt to a session | `occtl s send --async "prompt text" -s <id>` |
-| Auto-approve permissions | `occtl s respond <id> --auto-approve --wait` |
-| Wait for session to finish | `occtl s wait-for-idle <id> --timeout 600` |
-| Quick status check | `occtl s is-idle <id>` (exit 0=idle, 1=busy) |
-| Get session overview | `occtl s summary <id>` |
-| Read last assistant message | `occtl s last <id>` |
-| Read full message history | `occtl s messages <id> --text-only` |
-| Check todo progress | `occtl s todo <id>` |
-| Check file changes | `occtl s diff <id>` |
-| Wait for first of N to finish | `occtl s wait-any <id1> <id2> <id3>` |
-| Abort a stuck session | `occtl s abort <id>` |
+| Create a fresh session | `occtl create -q -t "ralph-N"` |
+| Send prompt to a session | `occtl send --async "prompt text" -s <id>` |
+| Auto-approve permissions | `occtl respond <id> --auto-approve --wait` |
+| Wait for session to finish | `occtl wait-for-idle <id> --timeout 600` |
+| Quick status check | `occtl is-idle <id>` (exit 0=idle, 1=busy) |
+| Get session overview | `occtl summary <id>` |
+| Read last assistant message | `occtl last <id>` |
+| Read full message history | `occtl messages <id> --text-only` |
+| Check todo progress | `occtl todo <id>` |
+| Check file changes | `occtl diff <id>` |
+| Wait for first of N to finish | `occtl wait-any <id1> <id2> <id3>` |
+| Abort a stuck session | `occtl abort <id>` |
 
 ### Parallel Execution
 
@@ -532,21 +524,21 @@ For independent tasks, run multiple sessions simultaneously:
 
 ```bash
 # Create sessions for independent tasks
-SID1=$(occtl s create -q -t "task-auth")
-SID2=$(occtl s create -q -t "task-payments")
-SID3=$(occtl s create -q -t "task-dashboard")
+SID1=$(occtl create -q -t "task-auth")
+SID2=$(occtl create -q -t "task-payments")
+SID3=$(occtl create -q -t "task-dashboard")
 
 # Send prompts to all three
-occtl s send --async "implement JWT auth. Read tasks.md..." -s $SID1
-occtl s send --async "add Stripe checkout. Read tasks.md..." -s $SID2
-occtl s send --async "build analytics dashboard. Read tasks.md..." -s $SID3
+occtl send --async "implement JWT auth. Read tasks.md..." -s $SID1
+occtl send --async "add Stripe checkout. Read tasks.md..." -s $SID2
+occtl send --async "build analytics dashboard. Read tasks.md..." -s $SID3
 
 # Wait for the first one to finish
-FINISHED=$(occtl s wait-any $SID1 $SID2 $SID3 --timeout 600)
+FINISHED=$(occtl wait-any $SID1 $SID2 $SID3 --timeout 600)
 # $FINISHED contains the session ID that went idle first
 
 # Check its result
-occtl s summary $FINISHED
+occtl summary $FINISHED
 ```
 
 When tasks would modify the same files, use worktrees for isolation:
@@ -564,8 +556,8 @@ WT2=$(occtl wt create payments -q)
 
 When a worker session fails or produces bad output:
 
-1. **Read the output**: `occtl s last <id>` — understand what went wrong
-2. **Check for errors**: `occtl s summary <id> --json` — look at the error field
+1. **Read the output**: `occtl last <id>` — understand what went wrong
+2. **Check for errors**: `occtl summary <id> --json` — look at the error field
 3. **Decide**:
    - If the task is too big, break it into subtasks in `tasks.md`
    - If the worker misunderstood, refine the prompt and retry
@@ -584,23 +576,23 @@ cat tasks.md     # understand what needs doing
 cat progress.txt # see what's done so far
 
 # 2. Iteration 1: first task
-SID=$(occtl s create -q -t "ralph-1-add-user-model")
-occtl s send --async "You are working on a project. Read tasks.md and progress.txt.
+SID=$(occtl create -q -t "ralph-1-add-user-model")
+occtl send --async "You are working on a project. Read tasks.md and progress.txt.
 Pick the first incomplete task and implement it. Run tests. Update tasks.md and
 progress.txt when done. Commit your changes." -s $SID
-occtl s respond $SID --auto-approve --wait &
-occtl s wait-for-idle $SID --timeout 600
-occtl s summary $SID
+occtl respond $SID --auto-approve --wait &
+occtl wait-for-idle $SID --timeout 600
+occtl summary $SID
 # Read output to see what happened
-occtl s last $SID
+occtl last $SID
 
 # 3. Check progress
 cat tasks.md     # was the task marked done?
 cat progress.txt # what did the worker report?
 
 # 4. Iteration 2: next task
-SID=$(occtl s create -q -t "ralph-2-add-api-endpoints")
-occtl s send --async "..." -s $SID
+SID=$(occtl create -q -t "ralph-2-add-api-endpoints")
+occtl send --async "..." -s $SID
 # ... repeat
 
 # 5. When tasks.md shows all tasks done: stop and report to the user.
@@ -611,8 +603,8 @@ occtl s send --async "..." -s $SID
 - **One task per session.** This is the core principle. Fresh context = better quality.
 - **You are the brains, workers are the hands.** Workers implement. You plan,
   evaluate, and adapt. Don't expect workers to make strategic decisions.
-- **Read worker output between iterations.** Use `occtl s last` and
-  `occtl s summary` to understand what actually happened before deciding
+- **Read worker output between iterations.** Use `occtl last` and
+  `occtl summary` to understand what actually happened before deciding
   what to do next.
 - **Adjust prompts based on results.** If a worker misunderstood, clarify.
   If a task was too big, break it down. This is where you add intelligence

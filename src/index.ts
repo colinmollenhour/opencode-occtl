@@ -42,32 +42,27 @@ program
   )
   .version("1.0.0");
 
-// Session subcommand group
-const session = program
-  .command("session")
-  .alias("s")
-  .description("Manage OpenCode sessions");
-
-session.addCommand(sessionListCommand());
-session.addCommand(sessionCreateCommand());
-session.addCommand(sessionGetCommand());
-session.addCommand(sessionMessagesCommand());
-session.addCommand(sessionLastCommand());
-session.addCommand(sessionStatusCommand());
-session.addCommand(sessionWatchCommand());
-session.addCommand(sessionSendCommand());
-session.addCommand(sessionRespondCommand());
-session.addCommand(sessionTodoCommand());
-session.addCommand(sessionAbortCommand());
-session.addCommand(sessionDiffCommand());
-session.addCommand(sessionChildrenCommand());
-session.addCommand(sessionShareCommand());
-session.addCommand(sessionUnshareCommand());
-session.addCommand(sessionWaitForTextCommand());
-session.addCommand(sessionWaitForIdleCommand());
-session.addCommand(sessionWaitAnyCommand());
-session.addCommand(sessionIsIdleCommand());
-session.addCommand(sessionSummaryCommand());
+// Session commands (top-level)
+program.addCommand(sessionListCommand());
+program.addCommand(sessionCreateCommand());
+program.addCommand(sessionGetCommand());
+program.addCommand(sessionMessagesCommand());
+program.addCommand(sessionLastCommand());
+program.addCommand(sessionStatusCommand());
+program.addCommand(sessionWatchCommand());
+program.addCommand(sessionSendCommand());
+program.addCommand(sessionRespondCommand());
+program.addCommand(sessionTodoCommand());
+program.addCommand(sessionAbortCommand());
+program.addCommand(sessionDiffCommand());
+program.addCommand(sessionChildrenCommand());
+program.addCommand(sessionShareCommand());
+program.addCommand(sessionUnshareCommand());
+program.addCommand(sessionWaitForTextCommand());
+program.addCommand(sessionWaitForIdleCommand());
+program.addCommand(sessionWaitAnyCommand());
+program.addCommand(sessionIsIdleCommand());
+program.addCommand(sessionSummaryCommand());
 
 // Worktree subcommand group
 const worktree = program
