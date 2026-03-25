@@ -21,27 +21,41 @@ export function sessionWaitForIdleCommand(): Command {
       const client = await ensureServer();
       const resolved = await resolveSession(client, sessionId);
 
-      // First do a quick non-blocking check
-      const statusResult = await client.session.status();
-      const statuses = statusResult.data ?? {};
-      const current = statuses[resolved];
-      if (!current || current.type === "idle") {
-        // Already idle
-        process.exit(0);
-      }
-
       // Set up timeout
       let timer: ReturnType<typeof setTimeout> | undefined;
       if (opts.timeout && opts.timeout > 0) {
         timer = setTimeout(() => process.exit(1), opts.timeout * 1000);
       }
 
-      await streamEvents(resolved, (event) => {
+      // To avoid a race between the status check and SSE connection,
+      // we start listening on SSE first, then check current status.
+      // If the session went idle before our SSE connected, we catch it
+      // in the status check. If it goes idle after, the SSE stream
+      // catches it. No gap.
+      let resolved_via_api = false;
+
+      const streamPromise = streamEvents(resolved, (event) => {
         if (event.type === "session.idle") {
           if (timer) clearTimeout(timer);
           return "stop";
         }
       });
+
+      // Give the SSE connection a moment to establish, then check status
+      await new Promise((r) => setTimeout(r, 50));
+
+      const statusResult = await client.session.status();
+      const statuses = statusResult.data ?? {};
+      const current = statuses[resolved];
+      if (!current || current.type === "idle") {
+        resolved_via_api = true;
+        if (timer) clearTimeout(timer);
+        process.exit(0);
+      }
+
+      if (!resolved_via_api) {
+        await streamPromise;
+      }
 
       process.exit(0);
     });
@@ -74,46 +88,51 @@ export function sessionWaitAnyCommand(): Command {
       }
       const watchSet = new Set(resolved);
 
-      // Quick check: any already idle?
-      const statusResult = await client.session.status();
-      const statuses = statusResult.data ?? {};
-      for (const sid of resolved) {
-        const current = statuses[sid];
-        if (!current || current.type === "idle") {
-          if (opts.json) {
-            console.log(formatJSON({ sessionID: sid, reason: "already_idle" }));
-          } else {
-            console.log(sid);
-          }
-          process.exit(0);
-        }
-      }
-
       // Set up timeout
       let timer: ReturnType<typeof setTimeout> | undefined;
       if (opts.timeout && opts.timeout > 0) {
         timer = setTimeout(() => process.exit(1), opts.timeout * 1000);
       }
 
-      // Watch the event stream for any of our sessions going idle
-      await streamAllEvents((event) => {
+      const outputAndExit = (sid: string, reason: string) => {
+        if (timer) clearTimeout(timer);
+        if (opts.json) {
+          console.log(formatJSON({ sessionID: sid, reason }));
+        } else {
+          console.log(sid);
+        }
+        process.exit(0);
+      };
+
+      // Start SSE first, then check status — avoids race condition
+      let resolved_via_api = false;
+
+      const streamPromise = streamAllEvents((event) => {
         if (event.type !== "session.idle") return;
 
         const eventSid = getEventSessionId(event);
         if (!eventSid || !watchSet.has(eventSid)) return;
 
-        if (timer) clearTimeout(timer);
-
-        if (opts.json) {
-          console.log(formatJSON({ sessionID: eventSid, reason: "idle" }));
-        } else {
-          console.log(eventSid);
-        }
-
+        outputAndExit(eventSid, "idle");
         return "stop";
       });
 
-      process.exit(0);
+      // Give SSE a moment to connect, then check current status
+      await new Promise((r) => setTimeout(r, 50));
+
+      const statusResult = await client.session.status();
+      const statuses = statusResult.data ?? {};
+      for (const sid of resolved) {
+        const current = statuses[sid];
+        if (!current || current.type === "idle") {
+          resolved_via_api = true;
+          outputAndExit(sid, "already_idle");
+        }
+      }
+
+      if (!resolved_via_api) {
+        await streamPromise;
+      }
     });
 }
 

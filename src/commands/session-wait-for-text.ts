@@ -18,8 +18,8 @@ export function sessionWaitForTextCommand(): Command {
       parseInt
     )
     .option(
-      "--check-existing",
-      "Also check messages already in the session before watching"
+      "--no-check-existing",
+      "Skip checking existing messages (only watch for new ones)"
     )
     .action(async (text: string, sessionId: string | undefined, opts) => {
       const client = await ensureServer();
@@ -33,8 +33,10 @@ export function sessionWaitForTextCommand(): Command {
         }, opts.timeout * 1000);
       }
 
-      // Optionally check existing messages first
-      if (opts.checkExisting) {
+      // Check existing messages first (default) to avoid race conditions.
+      // If the text was emitted between send --async and this command
+      // starting, we'd miss it without this check.
+      if (opts.checkExisting !== false) {
         const result = await client.session.messages({
           path: { id: resolved },
         });
@@ -52,8 +54,8 @@ export function sessionWaitForTextCommand(): Command {
         }
       }
 
-      // Accumulate text per assistant message so we can detect the marker
-      // even when it arrives across multiple SSE deltas
+      // Now watch the SSE stream for new messages containing the text.
+      // Accumulate text per message to handle markers split across deltas.
       const messageBuffers = new Map<string, string>();
 
       await streamEvents(resolved, (event) => {
@@ -73,20 +75,13 @@ export function sessionWaitForTextCommand(): Command {
             const after = current.slice(idx + text.length).trimStart();
             process.stdout.write(after);
             if (timer) clearTimeout(timer);
-            // Exit with success on next tick so stdout flushes
             process.exitCode = 0;
             return "stop";
           }
         }
 
-        // Also check completed messages (the full text snapshot)
-        if (event.type === "message.updated") {
-          // message.updated doesn't carry parts, so we rely on the
-          // accumulated buffer or check via API when session goes idle
-        }
-
-        // When the session goes idle, do a final check of the last message
-        // in case we missed deltas (e.g. compaction)
+        // When the session goes idle, do a final API check in case we
+        // missed deltas (e.g. due to compaction or reconnection)
         if (event.type === "session.idle") {
           checkLastMessage(resolved, text, timer).catch(() => {});
         }

@@ -184,10 +184,12 @@ occtl diff --json                       # JSON output
 occtl wait-for-text "SOME_TEXT"                    # wait on most recent session
 occtl wait-for-text "SOME_TEXT" <session-id>       # wait on specific session
 occtl wait-for-text "DONE" --timeout 300           # timeout after 5 minutes (exit 1)
-occtl wait-for-text "DONE" --check-existing        # also check existing messages first
+occtl wait-for-text "DONE" --no-check-existing     # skip checking existing messages
 ```
 
-Silently watches the SSE stream until a message contains the given text, then outputs everything after that text and exits 0. Exits 1 on timeout. Useful for automation scripts that need to block until the agent signals completion.
+Checks existing messages first (by default), then watches the SSE stream for new ones. Outputs everything after the matched text and exits 0. Exits 1 on timeout.
+
+The default check-existing behavior prevents a race condition where the text appears between `send --async` and `wait-for-text` starting. Use `--no-check-existing` only if you specifically want to wait for a *new* occurrence.
 
 ### Wait for Idle
 
@@ -616,7 +618,42 @@ occtl send --async "..." -s $SID
   keep it useful. Trim old entries if it gets too long.
 - **Commit early, commit often.** Tell workers to commit after each task.
   Git history is the real memory.
-- **Set timeouts.** Always use `--timeout` with wait commands to avoid
-  hanging forever on a stuck session.
 - **Report progress to the user.** Periodically summarize what's been done
   and what remains. The user should be able to check in and see status.
+
+### Handling Timeouts
+
+When a `wait-for-idle` or `wait-for-text` times out, do NOT blindly
+start a new session. That wastes the work the current session may still
+be doing. Instead:
+
+1. **Check if the session is still working:** `occtl is-idle <id>`
+2. **If still busy:** the task is taking longer than expected. Either:
+   - Increase the timeout and wait again: `occtl wait-for-idle <id> --timeout 1200`
+   - Check what it's doing: `occtl summary <id>` — it may be stuck in a loop
+   - Abort and retry with a clearer prompt: `occtl abort <id>`, then create a new session
+3. **If idle:** the timeout was a false alarm (the session finished between the
+   timeout firing and your check). Read the output: `occtl last <id>`
+4. **Never re-send the same prompt to the same session** — that adds to its
+   context window. Always create a fresh session for retries.
+
+### Model Recommendations
+
+As the orchestrator, you don't write code — you run `occtl` commands and make
+decisions. This is lightweight work that doesn't require a frontier model.
+
+- **Orchestrator (you):** Use a fast, cheap model like **Sonnet**, **Flash**,
+  or **GPT-4o-mini**. You're just reading summaries, comparing outputs, and
+  running shell commands. Speed and cost matter more than raw capability.
+- **Worker sessions:** Use a capable model like **Opus**, **Pro**, or **o3**
+  for the actual implementation work. Workers need deep reasoning to write
+  code, debug tests, and handle complexity.
+
+You can specify the worker model when sending prompts:
+```bash
+occtl send --async --model anthropic/claude-opus-4-6 "implement feature X" -s $SID
+```
+
+This keeps orchestration cheap while letting workers use the best model for
+the job. A typical Ralph Mode run might cost $0.50 in orchestration and
+$15 in worker tokens.

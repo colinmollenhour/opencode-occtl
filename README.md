@@ -177,6 +177,18 @@ occtl wt run payments -w "add Stripe checkout"
 
 See `occtl view-skill` for the full Ralph Mode guide.
 
+### Model Recommendations
+
+The orchestrating agent doesn't write code — it just runs `occtl` commands and makes decisions. Use a cheap, fast model for the orchestrator and a capable model for the workers:
+
+- **Orchestrator:** Sonnet, Flash, GPT-4o-mini (cheap, fast)
+- **Workers:** Opus, Pro, o3 (capable, thorough)
+
+```bash
+# Specify the worker model when sending prompts
+occtl send --async --model anthropic/claude-opus-4-6 "implement feature X" -s $SID
+```
+
 ## Use Cases
 
 ### Handoff: "Watch my session while I sleep"
