@@ -223,6 +223,130 @@ All commands that accept a session ID support:
 3. **Partial ID** - prefix or substring match (e.g., `ses_2e14` or just `2e14`)
 4. **Title search** - case-insensitive match against session title
 
+## Worktrees
+
+`occtl worktree` (alias `occtl wt`) manages git worktrees for running parallel, isolated sessions. Each worktree gets its own branch and working directory under `.occtl/worktrees/`, so multiple agents can work on different features simultaneously without file conflicts.
+
+### List Worktrees
+
+```bash
+occtl wt list                             # list all git worktrees
+occtl wt list --json                      # JSON output
+```
+
+### Create a Worktree
+
+```bash
+occtl wt create auth-feature              # creates worktree + branch + session
+occtl wt create auth-feature -b my-branch # custom branch name
+occtl wt create auth-feature --base main  # branch from a specific ref
+occtl wt create auth-feature --no-session # just create the worktree, no session
+occtl wt create auth-feature -q           # only output the worktree path
+occtl wt create auth-feature --json       # JSON output with path, branch, sessionID
+```
+
+By default, `create` also creates an OpenCode session scoped to the worktree directory.
+
+Worktrees are created under `.occtl/worktrees/<name>` with branch `worktree-<name>`.
+
+### Remove a Worktree
+
+```bash
+occtl wt rm auth-feature                  # remove by name
+occtl wt rm auth-feature --force          # force remove even if dirty
+```
+
+### Run a Prompt in a New Worktree
+
+The `run` command is a one-liner that creates a worktree, starts a session, and sends a prompt:
+
+```bash
+# Fire-and-forget: create worktree + session, send prompt, exit immediately
+occtl wt run auth-feature "implement JWT authentication"
+
+# Wait for completion: block until the session goes idle, show result
+occtl wt run auth-feature -w "implement JWT authentication"
+
+# With auto-approve and a specific model
+occtl wt run auth-feature -w --auto-approve \
+  --model anthropic/claude-sonnet-4-6 \
+  "implement JWT authentication"
+
+# Read prompt from a file
+occtl wt run auth-feature -w --stdin < prompts/auth.md
+```
+
+### Parallel Features
+
+Launch multiple features in parallel, each in its own worktree:
+
+```bash
+# Start 3 features simultaneously
+occtl wt run auth "implement JWT auth" &
+occtl wt run payments "add Stripe checkout" &
+occtl wt run dashboard "build analytics dashboard" &
+wait
+
+# Check status of each
+occtl s ls /path/to/repo/.occtl/worktrees/auth
+occtl s ls /path/to/repo/.occtl/worktrees/payments
+occtl s ls /path/to/repo/.occtl/worktrees/dashboard
+
+# When done, review diffs and merge
+for wt in auth payments dashboard; do
+  echo "=== $wt ==="
+  cd .occtl/worktrees/$wt && git log --oneline main..HEAD && cd -
+done
+```
+
+### Parallel Ralph Loop
+
+Combine worktrees with the Ralph Loop to run multiple autonomous task lists in parallel:
+
+```bash
+#!/usr/bin/env bash
+set -e
+
+# Each feature gets its own worktree and Ralph loop
+FEATURES=("auth" "payments" "dashboard")
+
+for feature in "${FEATURES[@]}"; do
+  (
+    # Create worktree
+    WT_PATH=$(occtl wt create "$feature" -q)
+
+    for i in $(seq 1 10); do
+      SID=$(occtl s create -q -t "ralph-${feature}-$i")
+
+      PROMPT="$(cat "prompts/${feature}.md")
+
+## Progress
+$(cat "${WT_PATH}/progress.txt" 2>/dev/null || echo 'Starting fresh.')
+
+When done, output RALPH_DONE. If ALL tasks are complete, output ALL_TASKS_COMPLETE."
+
+      occtl s send --async "$PROMPT" -s "$SID"
+      occtl s respond "$SID" --auto-approve --wait &
+      APID=$!
+
+      occtl s wait-for-text "RALPH_DONE" "$SID" --timeout 600 || true
+      kill $APID 2>/dev/null || true
+
+      occtl s last "$SID" >> "${WT_PATH}/progress.txt"
+
+      if occtl s wait-for-text "ALL_TASKS_COMPLETE" "$SID" \
+           --check-existing --timeout 1; then
+        echo "=== $feature complete ==="
+        break
+      fi
+    done
+  ) &
+done
+
+wait
+echo "All features complete. Review worktrees and merge."
+```
+
 ## Automation Patterns
 
 ### Continuous permission approval
