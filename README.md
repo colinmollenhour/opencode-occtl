@@ -2,7 +2,7 @@
 
 Extended CLI for managing [OpenCode](https://opencode.ai) sessions. Adds the commands missing from the `opencode` CLI: reading messages, watching sessions in real-time, sending prompts, responding to permission requests, managing worktrees, and more.
 
-Built for automating and orchestrating OpenCode sessions externally -- including [Ralph Loop](#ralph-loop) and [parallel worktree](#worktrees) workflows.
+Built for automating and orchestrating OpenCode sessions externally -- including [Ralph Mode](#ralph-mode), [session handoff](#use-cases), and [parallel worktree](#worktrees) workflows.
 
 ## Install
 
@@ -191,6 +191,66 @@ occtl wt run payments -w "add Stripe checkout"
 ```
 
 See `occtl view-skill` for the full Ralph Mode guide.
+
+## Use Cases
+
+### Handoff: "Watch my session while I sleep"
+
+You're working in a normal OpenCode session — maybe a big refactor that's halfway done. You want to go to bed but keep things moving. Start a second session and tell it to babysit the first:
+
+> "The session ses_abc123 is working on a refactor. When it finishes, use occtl to have it create a pull request, then monitor the CI pipeline. If the pipeline fails, read the failure logs and send the session a prompt to fix the issues. Keep going until the pipeline passes."
+
+The supervisory agent uses:
+- `occtl s wait-for-idle ses_abc123` — block until the worker finishes
+- `occtl s send -w "create a PR for this work" -s ses_abc123` — tell it to make a PR
+- `occtl s last ses_abc123` — read the PR URL from its output
+- `occtl s send -w "the CI pipeline failed with: ... fix it" -s ses_abc123` — feed it failures
+- Loop until the pipeline is green
+
+You come back in the morning to a merged PR.
+
+### PR Review Bot
+
+A session can review another session's work:
+
+> "Use occtl to watch for any session in this project that goes idle. When one does, read its diff and last message. If it made code changes, create a new session to review the changes and post review comments."
+
+- `occtl s list --json` — find active sessions
+- `occtl s wait-any <ids...>` — wait for any to finish
+- `occtl s diff <id>` — see what files changed
+- `occtl s create` + `occtl s send` — start a review session with the diff as context
+
+### Parallel Test Matrix
+
+Run the same change against different test configurations:
+
+> "Create 3 worktrees. In each one, send a session to run the test suite with a different Node version (18, 20, 22). Wait for all three to finish and report which ones passed."
+
+- `occtl wt create node18` / `node20` / `node22`
+- `occtl s send --async` to each with the appropriate test command
+- `occtl s wait-any` repeatedly until all three are idle
+- `occtl s summary` each to check results
+
+### Continuous Integration Helper
+
+Wire `occtl` into your CI pipeline to have an agent fix failures:
+
+```bash
+# In CI, after a failure:
+SID=$(occtl s create -q -t "ci-fix-$(date +%s)")
+occtl s send -w "The CI build failed. Here's the log: $(cat ci-output.log)
+Fix the issues and commit." -s $SID
+```
+
+### Session Migration
+
+Move context from one session to another when a session gets too large:
+
+> "Read the last 5 messages from ses_old using occtl, create a fresh session, and send it a summary of the prior work so it can continue."
+
+- `occtl s messages ses_old --limit 5 --text-only` — extract recent context
+- `occtl s create -q` — fresh session
+- `occtl s send --async "Continue the work. Here's what was done: ..."` — seed the new session
 
 ## Why Not Just Use opencode CLI?
 
