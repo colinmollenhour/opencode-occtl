@@ -37,7 +37,7 @@ export async function resolveSession(
     // Fall through to partial match
   }
 
-  // Try partial match
+  // Try partial match (global search so partial IDs work across all sessions)
   const result = await client.session.list();
   const sessions = result.data ?? [];
   const matches = sessions.filter(
@@ -53,9 +53,16 @@ export async function resolveSession(
   }
 
   if (matches.length > 1) {
+    // Prefer sessions in the current directory to resolve ambiguity
+    const dir = process.cwd();
+    const cwdMatches = matches.filter((s: Session) => s.directory === dir);
+    if (cwdMatches.length === 1) {
+      return cwdMatches[0].id;
+    }
+
     console.error(`Ambiguous session ID "${sessionId}", matches:`);
     for (const m of matches.slice(0, 5)) {
-      console.error(`  ${m.id}  ${m.title || "(untitled)"}`);
+      console.error(`  ${m.id}  ${m.title || "(untitled)"}  (${m.directory})`);
     }
     process.exit(1);
   }
