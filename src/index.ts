@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { Command } from "commander";
 import { sessionListCommand } from "./commands/session-list.js";
 import { sessionGetCommand } from "./commands/session-get.js";
@@ -33,6 +36,13 @@ import {
 } from "./commands/worktree.js";
 import { installSkillCommand, viewSkillCommand } from "./commands/skill.js";
 
+const pkg = JSON.parse(
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "package.json"),
+    "utf8"
+  )
+);
+
 const program = new Command();
 
 program
@@ -43,7 +53,7 @@ program
     "  OPENCODE_SERVER_HOST  (default: 127.0.0.1)\n" +
     "  OPENCODE_SERVER_PORT  (default: 4096)"
   )
-  .version("1.0.0");
+  .version(pkg.version);
 
 // Session commands (top-level)
 program.addCommand(sessionListCommand());
