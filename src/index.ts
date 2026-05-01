@@ -16,6 +16,7 @@ import { sessionAbortCommand } from "./commands/session-abort.js";
 import { sessionDiffCommand } from "./commands/session-diff.js";
 import { sessionChildrenCommand } from "./commands/session-children.js";
 import { sessionCreateCommand } from "./commands/session-create.js";
+import { sessionDeleteCommand } from "./commands/session-delete.js";
 import { sessionShareCommand, sessionUnshareCommand } from "./commands/session-share.js";
 import { sessionWaitForTextCommand } from "./commands/session-wait-for-text.js";
 import {
@@ -47,6 +48,7 @@ program
 // Session commands (top-level)
 program.addCommand(sessionListCommand());
 program.addCommand(sessionCreateCommand());
+program.addCommand(sessionDeleteCommand());
 program.addCommand(sessionGetCommand());
 program.addCommand(sessionMessagesCommand());
 program.addCommand(sessionLastCommand());

@@ -13,6 +13,9 @@ interface Model {
 interface Provider {
   id: string;
   name: string;
+  source?: string;
+  key?: string;
+  env?: string[];
   models: { [id: string]: Model };
 }
 
@@ -26,6 +29,10 @@ export function modelsCommand(): Command {
       "Filter: <provider> for that provider's models, or <provider>/<model> for detail view"
     )
     .option("-j, --json", "Output as JSON")
+    .option(
+      "--enabled",
+      "Only show providers that have credentials present (key set on the server)"
+    )
     .action(async (selector: string | undefined, opts) => {
       // ensureServer uses v1 just for the health check; the actual call is v2.
       await ensureServer();
@@ -37,7 +44,11 @@ export function modelsCommand(): Command {
         process.exit(1);
       }
 
-      const providers = (result.data.providers ?? []) as Provider[];
+      let providers = (result.data.providers ?? []) as Provider[];
+
+      if (opts.enabled) {
+        providers = providers.filter((p) => !!p.key);
+      }
 
       let providerFilter: string | undefined;
       let modelFilter: string | undefined;

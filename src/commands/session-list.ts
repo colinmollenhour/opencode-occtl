@@ -2,6 +2,7 @@ import { Command } from "commander";
 import path from "path";
 import { ensureServer } from "../client.js";
 import { formatSession, formatSessionDetailed, formatJSON } from "../format.js";
+import { listStoredSessionIds, readDefaults } from "../session-defaults.js";
 import type { Session } from "@opencode-ai/sdk";
 
 export function sessionListCommand(): Command {
@@ -23,8 +24,44 @@ export function sessionListCommand(): Command {
     )
     .option("--asc", "Sort ascending instead of descending")
     .option("--active", "Only show non-idle sessions (busy or retry)")
+    .option(
+      "--orphans",
+      "Instead of listing sessions, show locally-persisted defaults files whose session no longer exists on the server"
+    )
     .action(async (directory: string | undefined, opts) => {
       const client = await ensureServer();
+
+      if (opts.orphans) {
+        const stored = listStoredSessionIds();
+        const allLive = await client.session.list({});
+        const liveIds = new Set((allLive.data ?? []).map((s) => s.id));
+        const orphans = stored.filter((id) => !liveIds.has(id));
+
+        if (opts.json) {
+          console.log(
+            formatJSON(
+              orphans.map((id) => ({ sessionID: id, defaults: readDefaults(id) }))
+            )
+          );
+          return;
+        }
+
+        if (orphans.length === 0) {
+          console.log("No orphaned defaults files.");
+          return;
+        }
+
+        console.log(
+          "ID\tMODEL\tAGENT\tVARIANT\t(no live session — run `occtl rm <id>` to clean up)"
+        );
+        for (const id of orphans) {
+          const d = readDefaults(id) ?? {};
+          console.log(
+            `${id}\t${d.model ?? ""}\t${d.agent ?? ""}\t${d.variant ?? ""}`
+          );
+        }
+        return;
+      }
 
       // Determine which directory to filter by
       let filterDir: string | undefined;

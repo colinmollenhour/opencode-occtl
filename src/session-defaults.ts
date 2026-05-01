@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "fs";
+import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { dirname, join } from "path";
 
@@ -39,5 +39,15 @@ export function clearDefaults(sessionId: string): void {
     unlinkSync(pathFor(sessionId));
   } catch {
     // ignore missing file
+  }
+}
+
+export function listStoredSessionIds(): string[] {
+  try {
+    return readdirSync(configDir())
+      .filter((name) => name.endsWith(".json"))
+      .map((name) => name.slice(0, -".json".length));
+  } catch {
+    return [];
   }
 }
