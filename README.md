@@ -320,3 +320,13 @@ The `opencode` CLI provides `session list` and `session delete`. Everything else
 ## License
 
 MIT
+
+## How to Publish
+
+```sh
+npm version patch     # or minor / major
+git push && git push --tags
+gh release create vX.Y.Z --generate-notes
+```
+
+The `Publish to npm` GitHub Action fires on the release and pushes to npm with provenance.
