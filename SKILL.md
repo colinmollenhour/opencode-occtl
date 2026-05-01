@@ -20,11 +20,14 @@ occtl list                        # list all sessions
 occtl last                        # last message from most recent session
 occtl messages <id>               # all messages in a session
 occtl watch <id> --text-only      # stream text in real-time
-occtl send "fix the bug"          # send a message
+occtl send "fix the bug"          # send a message (sync)
+occtl stream "fix the bug"        # send + stream live events until idle
 occtl respond --auto-approve -w   # auto-approve permissions
+occtl models --enabled            # list configured providers + variants
 occtl todo                        # view session todo list
 occtl status                      # check if sessions are busy/idle
 occtl share                       # share session, get public URL
+occtl rm <id>                     # delete session + its local defaults
 ```
 
 ## Commands
@@ -53,16 +56,31 @@ occtl create -d /path/to/project      # create in a specific project directory
 occtl create -q                       # quiet mode: only output the session ID
 occtl create --json                   # full JSON output
 occtl create -p <parent-id>           # create a child session
+
+# Persist defaults so `send`/`stream` don't have to re-pass them
+occtl create --model openai/gpt-5.5 --variant high
+occtl create --agent build --model anthropic/claude-sonnet-4-6
 ```
 
 The `-q` flag is useful in scripts: `SID=$(occtl create -q)`
 
 The `-d` flag enables cross-project orchestration: `SID=$(occtl create -q -d /path/to/other/project)`
 
+Defaults from `--model`/`--agent`/`--variant` are persisted to `${XDG_CONFIG_HOME:-~/.config}/occtl/sessions/<id>.json` and automatically applied by subsequent `occtl send` and `occtl stream` calls. Explicit flags on those commands override the stored values.
+
+### Delete a Session
+
+```bash
+occtl delete <session-id>             # delete and drop local defaults
+occtl rm <session-id>                 # alias
+occtl rm <id> --keep-defaults         # delete server-side, keep defaults file
+```
+
 ### Get Session Details
 
 ```bash
-occtl get <session-id>        # detailed info about a session
+occtl get <session-id>        # detailed info about a session (includes local defaults)
+occtl show <session-id>       # alias for `get`
 occtl get <session-id> --json
 ```
 
@@ -115,15 +133,32 @@ occtl send --async "do this in background"        # send and return immediately
 occtl send -w "fix the tests"                     # send, block until idle, show result
 occtl send --model anthropic/claude-opus-4-6 "hi" # specify model
 occtl send --agent plan "analyze this code"       # specify agent
+occtl send --variant high "deep analysis"         # specify model variant
 occtl send --no-reply "context info"              # inject context without AI response
 occtl send --stdin < prompt.txt                   # read message from stdin
 occtl send "message" --json                       # JSON response output
 ```
 
-The three send modes:
+The four send modes:
 - **(default)** — synchronous: blocks on the HTTP request until the agent responds, returns the response.
-- **`--async`** — fire-and-forget: sends and exits immediately. Use with `watch` or `wait-for-text` separately.
-- **`--wait` / `-w`** — hybrid: sends async, blocks until `session.idle` via SSE, then fetches and displays the last assistant message. Best for scripts that need the result but want event-driven waiting.
+- **`--async`** — fire-and-forget: sends and exits immediately. Use with `watch`, `stream`, or `wait-for-text` separately.
+- **`--wait` / `-w`** — hybrid: sends async, blocks until `session.idle` via SSE, then fetches and displays the last assistant message. Race-free.
+- **`occtl stream`** (separate command) — sends async and streams live tool calls + text deltas until idle. Use `--json` for NDJSON of every SSE event. Best when you want progress visibility on long agentic prompts.
+
+If `--model`/`--agent`/`--variant` were stored at create time (see [Create a Session](#create-a-session)), they're applied automatically — no need to re-pass them.
+
+### Stream a Message Live
+
+`occtl stream` is a single command that does what would otherwise require `send --async` + `watch`:
+
+```bash
+occtl stream "write 8 template files"             # live tool/text events until idle
+occtl stream --json "..."                          # NDJSON of every event
+occtl stream -s <id> --variant high "..."          # works with all send flags
+occtl stream --stdin < prompt.md                   # read from stdin
+```
+
+It opens the SSE stream first (race-safe), then sends the prompt, then streams events until `session.idle`. Use this instead of building your own send-then-watch pipeline.
 
 ### Respond to Permission Requests
 
@@ -201,9 +236,12 @@ The default check-existing behavior prevents a race condition where the text app
 occtl wait-for-idle                     # block until most recent session is idle
 occtl wait-for-idle <session-id>        # block until specific session is idle
 occtl wait-for-idle --timeout 300       # timeout after 5 minutes (exit 1)
+occtl wait-for-idle --require-busy      # only settle on a real busy→idle SSE event
 ```
 
 Blocks until the session goes idle. Does a quick status check first — if already idle, exits immediately. Otherwise watches the SSE stream. Exit 0 = idle, exit 1 = timeout.
+
+**Race warning:** without `--require-busy`, a freshly created session that has never been busy reports idle immediately. If you call `wait-for-idle` right after `send --async`, the prompt may not have started yet and you'll exit prematurely. Use `--require-busy` to skip the early shortcut and wait for an actual `session.idle` SSE event. (Or just use `occtl send --wait` / `occtl stream`, which sequence things correctly.)
 
 ### Wait Any (Multiple Sessions)
 
@@ -221,9 +259,17 @@ Watches multiple sessions simultaneously. Outputs the session ID of the first on
 occtl is-idle                           # exit 0 if idle, exit 1 if busy
 occtl is-idle <session-id>
 occtl is-idle --json                    # {"sessionID": "...", "idle": true, "status": "idle"}
+occtl is-idle --require-busy            # treat "no status entry yet" as not-idle
 ```
 
 Non-blocking check. Useful for conditional logic in agent orchestration.
+
+In polling loops after `send --async`, always pair with `--require-busy` so a brand-new session doesn't exit the loop before the prompt has started:
+
+```bash
+occtl send --async "..." -s $SID
+while ! occtl is-idle --require-busy -s $SID; do sleep 2; done
+```
 
 ### Session Summary
 
@@ -252,6 +298,27 @@ occtl children                          # children of most recent session
 occtl children <session-id>             # children of specific session
 occtl children --json                   # JSON output
 ```
+
+### Discover Providers, Models, and Variants
+
+```bash
+occtl models                            # list all providers + their models
+occtl models --enabled                  # only providers with credentials present
+occtl models openai                     # list openai's models with variants
+occtl models openai/gpt-5.5             # detail view: limits + variants
+occtl models --json                     # raw /config/providers output
+```
+
+Use this when you don't know which `--model` or `--variant` strings the server accepts. Variants only appear on opencode v2 servers.
+
+### List Orphan Defaults
+
+```bash
+occtl ls --orphans                      # locally-persisted defaults files with no live session
+occtl ls --orphans --json
+```
+
+Cleanup hint: run `occtl rm <id>` for each orphan, or just delete the JSON file directly.
 
 ## Session ID Resolution
 

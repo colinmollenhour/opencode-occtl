@@ -51,15 +51,18 @@ export OPENCODE_SERVER_PORT=4096
 
 | Command | Description |
 |---------|-------------|
-| `list` | List sessions (filters by cwd, supports `--all`, path arg, `--sort`, `--asc`) |
-| `create` | Create a new session (`-q` for ID, `-t` for title, `-d` for directory) |
-| `get` | Get detailed session info |
+| `list` (`ls`) | List sessions (filters by cwd, supports `--all`, path arg, `--sort`, `--asc`, `--orphans`) |
+| `create` | Create a new session (`-q` for ID, `-t` for title, `-d` for directory, `--model`/`--agent`/`--variant` for persisted defaults) |
+| `get` (`show`) | Get detailed session info, including locally-persisted defaults |
+| `delete` (`rm`) | Delete a session and drop its locally-persisted defaults (`--keep-defaults` to preserve) |
 | `messages` | List messages (`--role`, `--limit`, `--text-only`, `--verbose`) |
 | `last` | Get the last message (text-only by default) |
 | `status` | Check session status (idle/busy/retry) |
 | `watch` | Watch session events via SSE (`--text-only`, `--json`, `--events`) |
-| `send` | Send a message (`--async`, `--wait`, `--model`, `--agent`, `--stdin`) |
+| `send` | Send a message (`--async`, `--wait`, `--model`, `--agent`, `--variant`, `--stdin`) |
+| `stream` | Send a message and stream events live until idle (`--json` for NDJSON) |
 | `respond` | Respond to permission requests (`--auto-approve`, `--wait`) |
+| `models` | List providers/models/variants from `/config/providers` (`--enabled`, `--json`) |
 | `todo` | View the session's todo list |
 | `abort` | Abort a running session |
 | `diff` | Show file changes in a session |
@@ -67,9 +70,9 @@ export OPENCODE_SERVER_PORT=4096
 | `share` | Share a session and get a public URL |
 | `unshare` | Remove sharing from a session |
 | `wait-for-text` | Block until a message contains given text, then exit 0 |
-| `wait-for-idle` | Block until a session goes idle |
+| `wait-for-idle` | Block until a session goes idle (`--require-busy` for race-free polling after `send --async`) |
 | `wait-any` | Wait for first of N sessions to go idle, output its ID |
-| `is-idle` | Non-blocking idle check (exit 0=idle, 1=busy) |
+| `is-idle` | Non-blocking idle check (`--require-busy` to treat "no status entry yet" as not-idle) |
 | `summary` | Compact overview: status, todos, cost, last message snippet |
 | `worktree list` | List git worktrees |
 | `worktree create` | Create a worktree with branch and optional session |
@@ -93,6 +96,35 @@ occtl send --async "fix the bug"
 
 # Wait: send async, block until session idle, show result
 occtl send --wait "fix the bug"
+
+# Stream: send async, print live tool calls + text deltas until idle
+occtl stream "write 8 template files"
+occtl stream --json "..."   # NDJSON of every SSE event
+```
+
+`stream` and `send --wait` are race-free send-and-wait primitives. If you build your own polling loop with `is-idle` or `wait-for-idle` after `send --async`, pass `--require-busy` so a session that hasn't yet been marked busy doesn't report idle prematurely.
+
+### Session Defaults
+
+`occtl create --model X --agent Y --variant Z` persists those defaults to `${XDG_CONFIG_HOME:-~/.config}/occtl/sessions/<id>.json`. Subsequent `occtl send` and `occtl stream` calls read and merge them (explicit flags override stored). `occtl delete` clears the file; `occtl ls --orphans` surfaces files whose session no longer exists.
+
+```bash
+occtl create -q --model openai/gpt-5.5 --variant high
+# now `occtl send "..."` automatically uses gpt-5.5/high
+
+occtl show <id>          # session info + local defaults
+occtl ls --orphans       # defaults files with no live session
+occtl rm <id>            # delete session and its defaults file
+```
+
+### Discovering Providers, Models, and Variants
+
+```bash
+occtl models                       # list all providers and models
+occtl models --enabled             # only providers with credentials present
+occtl models openai                # list openai's models with their variants
+occtl models openai/gpt-5.5        # detail view: limits + variants
+occtl models --json                # raw output of /config/providers
 ```
 
 ## Worktrees
