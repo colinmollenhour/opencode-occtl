@@ -1,7 +1,12 @@
 import { createOpencodeClient, type OpencodeClient } from "@opencode-ai/sdk";
+import {
+  createOpencodeClient as createOpencodeClientV2,
+  type OpencodeClient as OpencodeClientV2,
+} from "@opencode-ai/sdk/v2";
 import { execSync } from "child_process";
 
 let _client: OpencodeClient | null = null;
+let _clientV2: OpencodeClientV2 | null = null;
 let _baseUrl: string | null = null;
 
 /**
@@ -56,6 +61,15 @@ export function getClient(): OpencodeClient {
     });
   }
   return _client;
+}
+
+export function getClientV2(): OpencodeClientV2 {
+  if (!_clientV2) {
+    _clientV2 = createOpencodeClientV2({
+      baseUrl: getBaseUrl(),
+    });
+  }
+  return _clientV2;
 }
 
 export async function ensureServer(): Promise<OpencodeClient> {

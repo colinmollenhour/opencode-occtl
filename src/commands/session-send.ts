@@ -1,7 +1,9 @@
 import { Command } from "commander";
-import { ensureServer } from "../client.js";
+import type { Message, Part } from "@opencode-ai/sdk";
+import { ensureServer, getClientV2 } from "../client.js";
 import { formatMessage, formatJSON } from "../format.js";
 import { resolveSession } from "../resolve.js";
+import { readDefaults } from "../session-defaults.js";
 import { waitForIdle } from "../wait-util.js";
 
 export function sessionSendCommand(): Command {
@@ -21,9 +23,11 @@ export function sessionSendCommand(): Command {
     )
     .option("--agent <agent>", "Agent to use")
     .option("--model <model>", "Model to use (format: provider/model)")
+    .option("--variant <variant>", "Model variant to use (e.g. high)")
     .option("--stdin", "Read message from stdin instead of arguments")
     .action(async (messageParts: string[], opts) => {
       const client = await ensureServer();
+      const clientV2 = getClientV2();
       const resolved = await resolveSession(client, opts.session);
 
       let messageText: string;
@@ -42,38 +46,39 @@ export function sessionSendCommand(): Command {
         process.exit(1);
       }
 
-      // Parse model if provided
+      // Merge stored session defaults with explicit flags (explicit wins)
+      const stored = readDefaults(resolved) ?? {};
+      const modelStr: string | undefined = opts.model ?? stored.model;
+      const agent: string | undefined = opts.agent ?? stored.agent;
+      const variant: string | undefined = opts.variant ?? stored.variant;
+
       let model: { providerID: string; modelID: string } | undefined;
-      if (opts.model) {
-        const parts = opts.model.split("/");
+      if (modelStr) {
+        const parts = modelStr.split("/");
         if (parts.length === 2 && parts[0] && parts[1]) {
           model = { providerID: parts[0], modelID: parts[1] };
         }
       }
 
-      const body = {
+      const params = {
+        sessionID: resolved,
         parts: [{ type: "text" as const, text: messageText }],
         ...(model && { model }),
-        ...(opts.agent && { agent: opts.agent }),
+        ...(agent && { agent }),
+        ...(variant && { variant }),
         ...(opts.reply === false && { noReply: true }),
       };
 
       // --async: fire and forget
       if (opts.async) {
-        await client.session.promptAsync({
-          path: { id: resolved },
-          body,
-        });
+        await clientV2.session.promptAsync(params);
         console.log("Message sent (async).");
         return;
       }
 
       // --wait: send async, then block until session.idle, then show result
       if (opts.wait) {
-        await client.session.promptAsync({
-          path: { id: resolved },
-          body,
-        });
+        await clientV2.session.promptAsync(params);
 
         const result = await waitForIdle(client, resolved);
 
@@ -111,10 +116,7 @@ export function sessionSendCommand(): Command {
       }
 
       // Default: synchronous send (blocks until response)
-      const syncResult = await client.session.prompt({
-        path: { id: resolved },
-        body,
-      });
+      const syncResult = await clientV2.session.prompt(params);
 
       if (!syncResult.data) {
         console.error("No response received.");
@@ -127,10 +129,14 @@ export function sessionSendCommand(): Command {
       }
 
       console.log(
-        formatMessage(syncResult.data.info, syncResult.data.parts, {
-          verbose: opts.verbose,
-          textOnly: opts.textOnly ?? true,
-        })
+        formatMessage(
+          syncResult.data.info as unknown as Message,
+          syncResult.data.parts as unknown as Part[],
+          {
+            verbose: opts.verbose,
+            textOnly: opts.textOnly ?? true,
+          }
+        )
       );
     });
 }

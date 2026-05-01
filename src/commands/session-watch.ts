@@ -48,7 +48,7 @@ export function sessionWatchCommand(): Command {
     });
 }
 
-function handleTextOnly(event: Event): void {
+export function handleTextOnly(event: Event): void {
   if (event.type === "message.part.updated") {
     const props = event.properties as { part: { type: string; text?: string }; delta?: string };
     if (props.part.type === "text" && props.delta) {
@@ -57,7 +57,7 @@ function handleTextOnly(event: Event): void {
   }
 }
 
-function handleEvent(event: Event): void {
+export function handleEvent(event: Event): void {
   const time = new Date().toLocaleTimeString();
   switch (event.type) {
     case "message.updated": {

@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { ensureServer } from "../client.js";
 import { formatSessionDetailed, formatJSON } from "../format.js";
+import { writeDefaults, type SessionDefaults } from "../session-defaults.js";
 
 export function sessionCreateCommand(): Command {
   return new Command("create")
@@ -14,6 +15,18 @@ export function sessionCreateCommand(): Command {
     .option(
       "-d, --dir <path>",
       "Project directory for the session (defaults to cwd)"
+    )
+    .option(
+      "--model <model>",
+      "Default model for this session (format: provider/model). Stored locally and applied by `occtl send`."
+    )
+    .option(
+      "--agent <agent>",
+      "Default agent for this session. Stored locally and applied by `occtl send`."
+    )
+    .option(
+      "--variant <variant>",
+      "Default model variant for this session. Stored locally and applied by `occtl send`."
     )
     .option("-j, --json", "Output as JSON")
     .option("-q, --quiet", "Only output the session ID")
@@ -35,6 +48,15 @@ export function sessionCreateCommand(): Command {
       if (!result.data) {
         console.error("Failed to create session.");
         process.exit(1);
+      }
+
+      const defaults: SessionDefaults = {
+        ...(opts.model && { model: opts.model }),
+        ...(opts.agent && { agent: opts.agent }),
+        ...(opts.variant && { variant: opts.variant }),
+      };
+      if (Object.keys(defaults).length > 0) {
+        writeDefaults(result.data.id, defaults);
       }
 
       if (opts.quiet) {
