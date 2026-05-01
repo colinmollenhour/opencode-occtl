@@ -17,8 +17,10 @@ export interface WaitResult {
 export async function waitForIdle(
   client: OpencodeClient,
   sessionId: string,
-  timeoutMs?: number
+  timeoutMs?: number,
+  options?: { requireBusy?: boolean }
 ): Promise<WaitResult> {
+  const requireBusy = options?.requireBusy ?? false;
   return new Promise<WaitResult>((resolve) => {
     let settled = false;
     const settle = (result: WaitResult) => {
@@ -52,20 +54,25 @@ export async function waitForIdle(
       }
     });
 
-    // After SSE is connected, check current status via API
-    handle.connected.then(async () => {
-      if (settled) return;
-      try {
-        const statusResult = await client.session.status();
-        const statuses = statusResult.data ?? {};
-        const current = statuses[sessionId];
-        if (!current || current.type === "idle") {
-          settle({ idle: true, reason: "api" });
+    // After SSE is connected, check current status via API.
+    // With requireBusy, skip this shortcut — only a real session.idle
+    // event from SSE counts, so we won't return prematurely for sessions
+    // that have never been busy or whose busy→idle transition we missed.
+    if (!requireBusy) {
+      handle.connected.then(async () => {
+        if (settled) return;
+        try {
+          const statusResult = await client.session.status();
+          const statuses = statusResult.data ?? {};
+          const current = statuses[sessionId];
+          if (!current || current.type === "idle") {
+            settle({ idle: true, reason: "api" });
+          }
+        } catch {
+          // API check failed; rely on SSE stream
         }
-      } catch {
-        // API check failed; rely on SSE stream
-      }
-    });
+      });
+    }
   });
 }
 

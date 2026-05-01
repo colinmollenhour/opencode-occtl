@@ -17,12 +17,18 @@ export function sessionWaitForIdleCommand(): Command {
       "Timeout in seconds (exit 1 if not idle in time)",
       parseInt
     )
+    .option(
+      "--require-busy",
+      "Wait for an actual busy→idle transition; do not settle for sessions that are already (or have never left) idle"
+    )
     .action(async (sessionId: string | undefined, opts) => {
       const client = await ensureServer();
       const resolved = await resolveSession(client, sessionId);
 
       const timeoutMs = opts.timeout ? opts.timeout * 1000 : undefined;
-      const result = await waitForIdle(client, resolved, timeoutMs);
+      const result = await waitForIdle(client, resolved, timeoutMs, {
+        requireBusy: !!opts.requireBusy,
+      });
 
       if (result.idle) {
         process.exit(0);
@@ -93,6 +99,10 @@ export function sessionIsIdleCommand(): Command {
     )
     .argument("[session-id]", "Session ID (defaults to most recent)")
     .option("-j, --json", "Output status as JSON")
+    .option(
+      "--require-busy",
+      "Treat 'no status entry yet' as not-idle. Use in polling loops after `send --async` so brand-new sessions don't report idle before the prompt has started."
+    )
     .action(async (sessionId: string | undefined, opts) => {
       const client = await ensureServer();
       const resolved = await resolveSession(client, sessionId);
@@ -100,7 +110,9 @@ export function sessionIsIdleCommand(): Command {
       const statusResult = await client.session.status();
       const statuses = statusResult.data ?? {};
       const current = statuses[resolved];
-      const isIdle = !current || current.type === "idle";
+      const isIdle = opts.requireBusy
+        ? current?.type === "idle"
+        : !current || current.type === "idle";
 
       if (opts.json) {
         console.log(
