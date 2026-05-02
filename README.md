@@ -53,6 +53,7 @@ export OPENCODE_SERVER_PORT=4096
 |---------|-------------|
 | `list` (`ls`) | List sessions (filters by cwd, supports `--all`, path arg, `--sort`, `--asc`, `--orphans`) |
 | `create` | Create a new session (`-q` for ID, `-t` for title, `-d` for directory, `--model`/`--agent`/`--variant` for persisted defaults) |
+| `run` | One-shot prompt: create session, send, wait for response, write text. Supports `--spawn` for ephemeral server. |
 | `get` (`show`) | Get detailed session info, including locally-persisted defaults |
 | `delete` (`rm`) | Delete a session and drop its locally-persisted defaults (`--keep-defaults` to preserve) |
 | `messages` | List messages (`--role`, `--limit`, `--text-only`, `--verbose`) |
@@ -84,6 +85,43 @@ export OPENCODE_SERVER_PORT=4096
 All commands that accept a session ID support partial matching and title search. When no ID is given, the most recent session is used.
 
 All commands support `--json` for machine-readable output.
+
+### One-Shot Runs (`occtl run`)
+
+`occtl run` packages create-session + send + wait + read into a single command. Useful for scripted batch prompts (e.g. running the same review against multiple models in parallel) where you want to keep each call self-contained:
+
+```bash
+# Against the running server
+occtl run --model anthropic/claude-opus-4-7 --variant high \
+  --title "review craft" \
+  --file ./prompt.md \
+  --out ./result.md \
+  --timeout 540000 \
+  -- "Perform the review exactly as instructed."
+
+# With its own ephemeral opencode server (random free port, isolated state dir)
+occtl run --spawn --model openai/gpt-5.4 \
+  --file ./prompt.md \
+  --out ./result.md
+```
+
+Key flags:
+
+| Flag | Notes |
+|---|---|
+| `--model <provider/model>` | Required. |
+| `--variant`, `--agent`, `--thinking` | Forwarded to the model. |
+| `-f, --file <path>` | Repeatable. Files are concatenated into the prompt; trailing positional/`--message` is appended. |
+| `-o, --out <path>` | Write assistant text to this file. Sidecar `<out>.session` always gets the session ID. |
+| `--raw <path>` | Write the full last assistant message JSON. |
+| `--stderr <path>` | Capture run-level diagnostics (timeouts, empty responses) to a file instead of stderr. |
+| `--timeout <ms>` | Abort if the session doesn't go idle in time. Exits 124 with diagnostics. |
+| `--spawn` | Spawn an ephemeral `opencode serve` on a random port, run the prompt against it, then SIGTERM/SIGKILL on exit. Inherits the user's provider config and credentials. |
+| `--spawn-port <port>` | Use a specific port instead of random (with `--spawn`). |
+| `--password <pw>` | Server password (Basic auth). Reads `OPENCODE_SERVER_PASSWORD` if unset. With `--spawn`, applied to the spawned server too. |
+| `--ephemeral` | Delete the session after a successful run. Default is to keep sessions for token-usage tracking. |
+
+Exit codes: `0` success · `1` empty/no-text response or generic failure · `2` invalid arguments · `124` timeout.
 
 ### Send Modes
 

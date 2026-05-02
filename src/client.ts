@@ -8,6 +8,7 @@ import { execSync } from "child_process";
 let _client: OpencodeClient | null = null;
 let _clientV2: OpencodeClientV2 | null = null;
 let _baseUrl: string | null = null;
+let _password: string | null | undefined = undefined;
 
 /**
  * Auto-detect the OpenCode server by looking at running processes.
@@ -54,10 +55,58 @@ export function getBaseUrl(): string {
   return _baseUrl;
 }
 
+/**
+ * Override the auto-detected server URL (used after spawning an ephemeral
+ * `opencode serve`). Resets the cached SDK clients so subsequent calls hit
+ * the new URL.
+ */
+export function setServer(baseUrl: string): void {
+  _baseUrl = baseUrl;
+  _client = null;
+  _clientV2 = null;
+}
+
+/**
+ * Set or clear the OpenCode server password. `null` disables auth even if
+ * OPENCODE_SERVER_PASSWORD is in the environment; pass a string to use that
+ * explicit value. Resets the cached SDK clients.
+ */
+export function setPassword(pw: string | null): void {
+  _password = pw;
+  _client = null;
+  _clientV2 = null;
+}
+
+function getPassword(): string | null {
+  if (_password !== undefined) return _password;
+  return process.env.OPENCODE_SERVER_PASSWORD || null;
+}
+
+/**
+ * Return Basic-auth headers when a server password is configured, else `{}`.
+ * opencode's server uses HTTP Basic with username `opencode` and the
+ * password from OPENCODE_SERVER_PASSWORD.
+ */
+export function getAuthHeaders(): Record<string, string> {
+  const pw = getPassword();
+  if (!pw) return {};
+  const token = Buffer.from(`opencode:${pw}`).toString("base64");
+  return { Authorization: `Basic ${token}` };
+}
+
+function authFetch(request: Request): ReturnType<typeof fetch> {
+  const auth = getAuthHeaders();
+  if (!auth.Authorization) return fetch(request);
+  const headers = new Headers(request.headers);
+  headers.set("Authorization", auth.Authorization);
+  return fetch(new Request(request, { headers }));
+}
+
 export function getClient(): OpencodeClient {
   if (!_client) {
     _client = createOpencodeClient({
       baseUrl: getBaseUrl(),
+      fetch: authFetch as unknown as typeof fetch,
     });
   }
   return _client;
@@ -67,6 +116,7 @@ export function getClientV2(): OpencodeClientV2 {
   if (!_clientV2) {
     _clientV2 = createOpencodeClientV2({
       baseUrl: getBaseUrl(),
+      fetch: authFetch as unknown as typeof fetch,
     });
   }
   return _clientV2;

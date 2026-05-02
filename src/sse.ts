@@ -1,5 +1,5 @@
 import type { Event } from "@opencode-ai/sdk";
-import { getBaseUrl } from "./client.js";
+import { getBaseUrl, getAuthHeaders } from "./client.js";
 
 export type StreamResult = "stopped" | "disconnected";
 
@@ -81,7 +81,7 @@ export function startAllStream(
     let response: Response;
     try {
       response = await fetch(url, {
-        headers: { Accept: "text/event-stream" },
+        headers: { Accept: "text/event-stream", ...getAuthHeaders() },
       });
     } catch {
       resolveConnected!();
