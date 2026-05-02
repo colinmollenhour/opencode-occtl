@@ -159,7 +159,7 @@ occtl wt rm auth-feature
 occtl install-skill
 ```
 
-This copies the skill to `~/.config/opencode/skills/occtl/`. Restart OpenCode to pick it up. The skill includes full command reference, Ralph Loop templates, and worktree patterns.
+This copies the skill to `~/.config/opencode/skills/occtl/` and any other found user-level skill directories, such as `~/.claude/skills/occtl/` or `~/.agents/skills/occtl/`. Restart OpenCode to pick it up. The skill includes full command reference, Ralph Loop templates, and worktree patterns.
 
 To view the skill without installing:
 

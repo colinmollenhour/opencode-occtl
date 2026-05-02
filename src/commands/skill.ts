@@ -11,14 +11,27 @@ function getSkillPath(): string {
   return resolve(__dirname, "..", "..", "SKILL.md");
 }
 
-function getInstallDir(): string {
+function getHomeDir(): string {
   const home = process.env.HOME || process.env.USERPROFILE || "~";
-  return join(home, ".config", "opencode", "skills", "occtl");
+  return home;
+}
+
+function getInstallDirs(): string[] {
+  const home = getHomeDir();
+  const defaultRoot = join(home, ".config", "opencode", "skills");
+  const candidateRoots = [
+    defaultRoot,
+    join(home, ".claude", "skills"),
+    join(home, ".agents", "skills"),
+  ];
+
+  const roots = candidateRoots.filter((root) => root === defaultRoot || existsSync(root));
+  return [...new Set(roots)].map((root) => join(root, "occtl"));
 }
 
 export function installSkillCommand(): Command {
   return new Command("install-skill")
-    .description("Install the occtl skill as an OpenCode user-level skill")
+    .description("Install the occtl skill to found user-level skill directories")
     .option("-f, --force", "Overwrite existing skill if present")
     .action(async (opts) => {
       const src = getSkillPath();
@@ -27,19 +40,27 @@ export function installSkillCommand(): Command {
         process.exit(1);
       }
 
-      const destDir = getInstallDir();
-      const dest = join(destDir, "SKILL.md");
+      const destDirs = getInstallDirs();
+      const existing = destDirs.filter((destDir) => existsSync(join(destDir, "SKILL.md")));
 
-      if (existsSync(dest) && !opts.force) {
-        console.error(`Skill already installed at ${destDir}`);
+      if (existing.length > 0 && !opts.force) {
+        console.error("Skill already installed at:");
+        for (const destDir of existing) {
+          console.error(`  ${destDir}`);
+        }
         console.error("Use --force to overwrite.");
         process.exit(1);
       }
 
-      mkdirSync(destDir, { recursive: true });
-      copyFileSync(src, dest);
+      for (const destDir of destDirs) {
+        mkdirSync(destDir, { recursive: true });
+        copyFileSync(src, join(destDir, "SKILL.md"));
+      }
 
-      console.log(`Installed occtl skill to ${destDir}`);
+      console.log("Installed occtl skill to:");
+      for (const destDir of destDirs) {
+        console.log(`  ${destDir}`);
+      }
       console.log("Restart OpenCode to pick up the new skill.");
     });
 }
