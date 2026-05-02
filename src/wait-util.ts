@@ -83,6 +83,15 @@ export interface WaitAnyResult {
   reason: "api" | "sse" | "disconnected" | "timeout";
 }
 
+export interface WaitAllResult {
+  /** Session IDs confirmed idle before timeout/disconnect. */
+  sessionIDs: string[];
+  /** Session IDs still pending if timeout/disconnect occurred. */
+  pending: string[];
+  /** How the wait ended. */
+  reason: "api" | "sse" | "disconnected" | "timeout";
+}
+
 /**
  * Race-safe wait for any of multiple sessions to go idle.
  */
@@ -145,5 +154,74 @@ export async function waitForAnyIdle(
         // API check failed; rely on SSE stream
       }
     });
+  });
+}
+
+/**
+ * Race-safe wait for all of multiple sessions to go idle.
+ */
+export async function waitForAllIdle(
+  client: OpencodeClient,
+  sessionIds: string[],
+  timeoutMs?: number,
+  options?: { requireBusy?: boolean }
+): Promise<WaitAllResult> {
+  const uniqueSessionIds = [...new Set(sessionIds)];
+  const pending = new Set(uniqueSessionIds);
+  const completed = new Set<string>();
+  const requireBusy = options?.requireBusy ?? false;
+
+  return new Promise<WaitAllResult>((resolve) => {
+    let settled = false;
+    const settle = (reason: WaitAllResult["reason"]) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      handle.cancel();
+      resolve({
+        sessionIDs: uniqueSessionIds.filter((sid) => completed.has(sid)),
+        pending: uniqueSessionIds.filter((sid) => pending.has(sid)),
+        reason,
+      });
+    };
+    const markIdle = (sid: string, reason: WaitAllResult["reason"]) => {
+      if (!pending.has(sid)) return;
+      pending.delete(sid);
+      completed.add(sid);
+      if (pending.size === 0) settle(reason);
+    };
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (timeoutMs && timeoutMs > 0) {
+      timer = setTimeout(() => settle("timeout"), timeoutMs);
+    }
+
+    const handle = startAllStream((event) => {
+      if (event.type !== "session.idle") return;
+      const sid = getEventSessionId(event);
+      if (!sid || !pending.has(sid)) return;
+      markIdle(sid, "sse");
+    });
+
+    handle.result.then((streamResult: StreamResult) => {
+      if (!settled && streamResult === "disconnected") settle("disconnected");
+    });
+
+    if (!requireBusy) {
+      handle.connected.then(async () => {
+        if (settled) return;
+        try {
+          const statusResult = await client.session.status();
+          const statuses = statusResult.data ?? {};
+          for (const sid of uniqueSessionIds) {
+            if (settled) return;
+            const current = statuses[sid];
+            if (!current || current.type === "idle") markIdle(sid, "api");
+          }
+        } catch {
+          // API check failed; rely on SSE stream
+        }
+      });
+    }
   });
 }

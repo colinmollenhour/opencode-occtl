@@ -27,6 +27,7 @@ import { sessionWaitForTextCommand } from "./commands/session-wait-for-text.js";
 import {
   sessionWaitForIdleCommand,
   sessionWaitAnyCommand,
+  sessionWaitAllCommand,
   sessionIsIdleCommand,
 } from "./commands/session-wait.js";
 import { sessionSummaryCommand } from "./commands/session-summary.js";
@@ -81,6 +82,7 @@ program.addCommand(sessionUnshareCommand());
 program.addCommand(sessionWaitForTextCommand());
 program.addCommand(sessionWaitForIdleCommand());
 program.addCommand(sessionWaitAnyCommand());
+program.addCommand(sessionWaitAllCommand());
 program.addCommand(sessionIsIdleCommand());
 program.addCommand(sessionSummaryCommand());
 

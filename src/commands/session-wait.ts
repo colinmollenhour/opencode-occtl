@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { ensureServer } from "../client.js";
 import { resolveSession } from "../resolve.js";
-import { waitForIdle, waitForAnyIdle } from "../wait-util.js";
+import { waitForIdle, waitForAnyIdle, waitForAllIdle } from "../wait-util.js";
 import { formatJSON } from "../format.js";
 
 // ─── wait-for-idle ─────────────────────────────────────
@@ -83,6 +83,61 @@ export function sessionWaitAnyCommand(): Command {
 
       if (result.reason === "timeout") {
         console.error("Timeout: no session went idle in time.");
+      } else if (result.reason === "disconnected") {
+        console.error("Error: lost connection to OpenCode server.");
+      }
+      process.exit(1);
+    });
+}
+
+// ─── wait-all ──────────────────────────────────────────
+
+export function sessionWaitAllCommand(): Command {
+  return new Command("wait-all")
+    .description(
+      "Wait for all of multiple sessions to go idle. Outputs each session ID when all are idle."
+    )
+    .argument(
+      "<session-ids...>",
+      "Two or more session IDs to watch"
+    )
+    .option(
+      "-t, --timeout <seconds>",
+      "Timeout in seconds (exit 1 if any session does not finish)",
+      parseInt
+    )
+    .option("-j, --json", "Output as JSON")
+    .option(
+      "--require-busy",
+      "Wait for actual session.idle events; do not count sessions already idle at startup"
+    )
+    .action(async (sessionIds: string[], opts) => {
+      const client = await ensureServer();
+
+      const resolved: string[] = [];
+      for (const sid of sessionIds) {
+        resolved.push(await resolveSession(client, sid));
+      }
+
+      const timeoutMs = opts.timeout ? opts.timeout * 1000 : undefined;
+      const result = await waitForAllIdle(client, resolved, timeoutMs, {
+        requireBusy: !!opts.requireBusy,
+      });
+
+      if (result.pending.length === 0) {
+        if (opts.json) {
+          console.log(formatJSON({ sessionIDs: result.sessionIDs, reason: result.reason }));
+        } else {
+          console.log(result.sessionIDs.join("\n"));
+        }
+        process.exit(0);
+      }
+
+      if (opts.json) {
+        console.log(formatJSON(result));
+      }
+      if (result.reason === "timeout") {
+        console.error(`Timeout: ${result.pending.length} session(s) did not go idle in time.`);
       } else if (result.reason === "disconnected") {
         console.error("Error: lost connection to OpenCode server.");
       }

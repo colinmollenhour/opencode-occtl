@@ -78,6 +78,7 @@ export OPENCODE_SERVER_PASSWORD=...   # if the server requires HTTP Basic auth
 | `wait-for-text` | Block until a message contains given text, then exit 0 |
 | `wait-for-idle` | Block until a session goes idle (`--require-busy` for race-free polling after `send --async`) |
 | `wait-any` | Wait for first of N sessions to go idle, output its ID |
+| `wait-all` | Wait for all N sessions to go idle, output their IDs |
 | `is-idle` | Non-blocking idle check (`--require-busy` to treat "no status entry yet" as not-idle) |
 | `summary` | Compact overview: status, todos, cost, last message snippet |
 | `worktree list` | List git worktrees |
@@ -145,7 +146,7 @@ occtl stream "write 8 template files"
 occtl stream --json "..."   # NDJSON of every SSE event
 ```
 
-`stream` and `send --wait` are race-free send-and-wait primitives. If you build your own polling loop with `is-idle` or `wait-for-idle` after `send --async`, pass `--require-busy` so a session that hasn't yet been marked busy doesn't report idle prematurely.
+`stream` and `send --wait` are race-free send-and-wait primitives. If you build your own polling loop with `is-idle`, `wait-for-idle`, or `wait-all` after `send --async`, pass `--require-busy` so a session that hasn't yet been marked busy doesn't report idle prematurely.
 
 ### Session Defaults
 
@@ -202,7 +203,7 @@ occtl wt rm auth-feature
 occtl install-skill
 ```
 
-This copies the skill to `~/.config/opencode/skills/occtl/` and any other found user-level skill directories, such as `~/.claude/skills/occtl/` or `~/.agents/skills/occtl/`. Restart OpenCode to pick it up. The skill includes full command reference, Ralph Loop templates, and worktree patterns.
+This copies the skill to `~/.config/opencode/skills/occtl/` and any other found user-level skill directories, such as `~/.claude/skills/occtl/` or `~/.agents/skills/occtl/`. Restart OpenCode to pick it up. The skill includes a compact command reference, Ralph Loop workflow, and worktree patterns.
 
 To view the skill without installing:
 
@@ -250,7 +251,7 @@ occtl wt run auth -w "implement JWT auth"
 occtl wt run payments -w "add Stripe checkout"
 ```
 
-See `occtl view-skill` for the full Ralph Mode guide.
+See `occtl view-skill` for the compact Ralph Mode guide.
 
 ### Model Recommendations
 
@@ -289,6 +290,7 @@ A session can review another session's work:
 
 - `occtl list --json` — find active sessions
 - `occtl wait-any <ids...>` — wait for any to finish
+- `occtl wait-all <ids...>` — wait for every worker before final verification/reporting
 - `occtl diff <id>` — see what files changed
 - `occtl create` + `occtl send` — start a review session with the diff as context
 
@@ -300,7 +302,7 @@ Run the same change against different test configurations:
 
 - `occtl wt create node18` / `node20` / `node22`
 - `occtl send --async` to each with the appropriate test command
-- `occtl wait-any` repeatedly until all three are idle
+- `occtl wait-all <ids...> --require-busy` to wait until all three are idle
 - `occtl summary` each to check results
 
 ### Continuous Integration Helper
@@ -329,9 +331,10 @@ CLIENT=$(occtl create -q -d /path/to/frontend -t "users client")
 occtl send --async "implement /users endpoints" -s $API
 occtl send --async "implement users API client" -s $CLIENT
 
-# Wait for both, react to whichever finishes first
-DONE=$(occtl wait-any $API $CLIENT)
-occtl summary $DONE
+# Wait for both before integration verification
+occtl wait-all $API $CLIENT --require-busy
+occtl summary $API
+occtl summary $CLIENT
 ```
 
 Works because one OpenCode server manages sessions across directories. Useful for API + client, library + consumers, or monorepo coordination.
