@@ -6,6 +6,8 @@ import {
   extractText,
   truncate,
   formatTimeAgo,
+  getMessageCostAndTokens,
+  hasTokenUsage,
 } from "../format.js";
 
 export function sessionSummaryCommand(): Command {
@@ -63,12 +65,26 @@ export function sessionSummaryCommand(): Command {
         lastSnippet = truncate(text, opts.snippetLength);
       }
 
-      // Compute total cost
+      // Compute total cost and token usage.
       let totalCost = 0;
+      const tokens = {
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cache: {
+          read: 0,
+          write: 0,
+        },
+      };
       for (const m of messages) {
         if (m.info.role === "assistant") {
-          const aMsg = m.info as { cost?: number };
-          if (aMsg.cost) totalCost += aMsg.cost;
+          const usage = getMessageCostAndTokens(m);
+          totalCost += usage.cost;
+          tokens.input += usage.tokens.input;
+          tokens.output += usage.tokens.output;
+          tokens.reasoning += usage.tokens.reasoning;
+          tokens.cache.read += usage.tokens.cache.read;
+          tokens.cache.write += usage.tokens.cache.write;
         }
       }
 
@@ -91,6 +107,8 @@ export function sessionSummaryCommand(): Command {
           pending: todoTotal - todoCompleted - todoInProgress,
         },
         cost: `$${totalCost.toFixed(4)}`,
+        totalCost,
+        tokens,
         changes,
         lastMessage: lastSnippet,
       };
@@ -110,6 +128,14 @@ export function sessionSummaryCommand(): Command {
         );
       }
       console.log(`Cost:     ${summary.cost}`);
+      if (hasTokenUsage(tokens)) {
+        console.log(
+          `Tokens:   in=${tokens.input} out=${tokens.output}` +
+            (tokens.reasoning ? ` reasoning=${tokens.reasoning}` : "") +
+            (tokens.cache.read ? ` cache_read=${tokens.cache.read}` : "") +
+            (tokens.cache.write ? ` cache_write=${tokens.cache.write}` : "")
+        );
+      }
       console.log(`Changes:  ${summary.changes}`);
       if (lastSnippet) {
         console.log(`Last msg: ${lastSnippet}`);

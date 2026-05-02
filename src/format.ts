@@ -1,5 +1,25 @@
 import type { Session, Message, Part, AssistantMessage, UserMessage } from "@opencode-ai/sdk";
 
+type MessageEnvelope = {
+  info: Message;
+  parts: Part[];
+};
+
+type TokenUsage = {
+  input: number;
+  output: number;
+  reasoning: number;
+  cache: {
+    read: number;
+    write: number;
+  };
+};
+
+type CostAndTokens = {
+  cost: number;
+  tokens: TokenUsage;
+};
+
 export function formatTime(ts: number): string {
   return new Date(ts).toLocaleString();
 }
@@ -79,6 +99,67 @@ export function extractToolCalls(parts: Part[]): Array<{
         title: toolPart.state?.title,
       };
     });
+}
+
+export function formatMessageJSON(message: MessageEnvelope): unknown {
+  return {
+    ...message.info,
+    info: message.info,
+    parts: message.parts,
+  };
+}
+
+export function getMessageCostAndTokens(message: MessageEnvelope): CostAndTokens {
+  const tokens = emptyTokens();
+
+  if (isAssistantMessage(message.info)) {
+    addTokens(tokens, message.info.tokens);
+    if (message.info.cost > 0) {
+      return { cost: message.info.cost, tokens };
+    }
+  }
+
+  let cost = 0;
+  for (const part of message.parts) {
+    if (part.type !== "step-finish") continue;
+    const step = part as { cost?: number; tokens?: TokenUsage };
+    if (typeof step.cost === "number") cost += step.cost;
+    if (!isAssistantMessage(message.info) && step.tokens) {
+      addTokens(tokens, step.tokens);
+    }
+  }
+
+  return { cost, tokens };
+}
+
+export function hasTokenUsage(tokens: TokenUsage): boolean {
+  return (
+    tokens.input > 0 ||
+    tokens.output > 0 ||
+    tokens.reasoning > 0 ||
+    tokens.cache.read > 0 ||
+    tokens.cache.write > 0
+  );
+}
+
+function emptyTokens(): TokenUsage {
+  return {
+    input: 0,
+    output: 0,
+    reasoning: 0,
+    cache: {
+      read: 0,
+      write: 0,
+    },
+  };
+}
+
+function addTokens(total: TokenUsage, next: TokenUsage): void {
+  total.input += next.input ?? 0;
+  total.output += next.output ?? 0;
+  total.reasoning += next.reasoning ?? 0;
+  total.cache.read += next.cache?.read ?? 0;
+  total.cache.write += next.cache?.write ?? 0;
 }
 
 export function formatMessage(

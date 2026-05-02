@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { ensureServer } from "../client.js";
-import { formatMessage, formatJSON } from "../format.js";
+import { formatMessage, formatJSON, formatMessageJSON } from "../format.js";
 import { resolveSession } from "../resolve.js";
 
 export function sessionLastCommand(): Command {
@@ -33,7 +33,7 @@ export function sessionLastCommand(): Command {
       const last = messages[messages.length - 1];
 
       if (opts.json) {
-        console.log(formatJSON(last));
+        console.log(formatJSON(formatMessageJSON(last)));
         return;
       }
 

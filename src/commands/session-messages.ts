@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { ensureServer } from "../client.js";
-import { formatMessage, formatJSON } from "../format.js";
+import { formatMessage, formatJSON, formatMessageJSON } from "../format.js";
 import { resolveSession } from "../resolve.js";
 
 export function sessionMessagesCommand(): Command {
@@ -32,7 +32,7 @@ export function sessionMessagesCommand(): Command {
       }
 
       if (opts.json) {
-        console.log(formatJSON(messages));
+        console.log(formatJSON(messages.map(formatMessageJSON)));
         return;
       }
 

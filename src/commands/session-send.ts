@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import type { Message, Part } from "@opencode-ai/sdk";
 import { ensureServer, getClientV2 } from "../client.js";
-import { formatMessage, formatJSON } from "../format.js";
+import { formatMessage, formatJSON, formatMessageJSON } from "../format.js";
 import { resolveSession } from "../resolve.js";
 import { readDefaults } from "../session-defaults.js";
 import { waitForIdle } from "../wait-util.js";
@@ -101,7 +101,7 @@ export function sessionSendCommand(): Command {
         }
 
         if (opts.json) {
-          console.log(formatJSON(last));
+          console.log(formatJSON(formatMessageJSON(last)));
           return;
         }
 
