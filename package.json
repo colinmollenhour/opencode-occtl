@@ -1,6 +1,6 @@
 {
   "name": "@colinmollenhour/occtl",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Extended CLI for managing OpenCode sessions",
   "keywords": [
     "opencode",
