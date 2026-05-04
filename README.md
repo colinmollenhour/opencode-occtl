@@ -1,383 +1,374 @@
 # occtl
 
-Extended CLI for managing [OpenCode](https://opencode.ai) sessions. Adds the commands missing from the `opencode` CLI: reading messages, watching sessions in real-time, sending prompts, responding to permission requests, managing worktrees, and more.
+With `occtl` you can inspect, automate, and orchestrate OpenCode sessions from your terminal. Unlike the built-in OpenCode CLI, `occtl` can read messages, send prompts, wait on session state, respond to permission requests, run one-shot prompts, and manage isolated git worktrees.
 
-Built for automating and orchestrating OpenCode sessions externally -- including [Ralph Mode](#ralph-mode), [session handoff](#use-cases), and [parallel worktree](#worktrees) workflows.
+Use it when you want shell scripts, another agent, or your own tooling to control OpenCode sessions without driving the OpenCode UI.
 
 ## Install
+
+Requirements:
+
+- Node.js 20 or later
+- A configured [OpenCode](https://opencode.ai) installation
+- A running OpenCode server, unless you use `occtl run --spawn`
+
+Install the CLI with npm:
 
 ```bash
 npm install -g @colinmollenhour/occtl
 ```
 
-## Quick Start
+Verify the installation:
 
 ```bash
-# List sessions for the current directory
-occtl list
-
-# Get the last assistant message
-occtl last
-
-# Watch a session stream in real-time
-occtl watch --text-only
-
-# Send a prompt and wait for the response
-occtl send "fix the failing tests"
-
-# Auto-approve all permission requests
-occtl respond --auto-approve --wait
-
-# One-shot prompt: create + send + wait + write — optionally with its own opencode server
-occtl run --spawn --model openai/gpt-5.4 --file ./prompt.md --out ./result.md
-
-# Run a task in an isolated worktree
-occtl worktree run auth -w "implement JWT authentication"
+occtl --version
+occtl --help
 ```
 
-`worktree` can be shortened to `wt`:
+## Quickstart
+
+Start an OpenCode server in one terminal:
 
 ```bash
-occtl wt run payments -w "add Stripe checkout"
+opencode serve
 ```
 
-## Server Detection
-
-`occtl` auto-detects a running OpenCode server by inspecting processes. Override with environment variables:
+In another terminal, verify that `occtl` can reach it:
 
 ```bash
-export OPENCODE_SERVER_HOST=127.0.0.1
-export OPENCODE_SERVER_PORT=4096
-export OPENCODE_SERVER_PASSWORD=...   # if the server requires HTTP Basic auth
+occtl ping
 ```
 
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `ping` | Check that an OpenCode server is reachable and print the connected host |
-| `list` (`ls`) | List sessions (filters by cwd, supports `--all`, path arg, `--sort`, `--asc`, `--orphans`) |
-| `create` | Create a new session (`-q` for ID, `-t` for title, `-d` for directory, `--model`/`--agent`/`--variant` for persisted defaults) |
-| `run` | One-shot prompt: create session, send, wait for response, write text. Supports `--spawn` for ephemeral server. |
-| `get` (`show`) | Get detailed session info, including locally-persisted defaults |
-| `delete` (`rm`) | Delete a session and drop its locally-persisted defaults (`--keep-defaults` to preserve) |
-| `messages` | List messages (`--role`, `--limit`, `--text-only`, `--verbose`) |
-| `last` | Get the last message (text-only by default) |
-| `status` | Check session status (idle/busy/retry) |
-| `watch` | Watch session events via SSE (`--text-only`, `--json`, `--events`) |
-| `send` | Send a message (`--async`, `--wait`, `--model`, `--agent`, `--variant`, `--stdin`) |
-| `stream` | Send a message and stream events live until idle (`--json` for NDJSON) |
-| `respond` | Respond to permission requests (`--auto-approve`, `--wait`) |
-| `models` | List/search providers/models/variants from `/config/providers` (`--grep`, `--enabled`, `--json`) |
-| `todo` | View the session's todo list |
-| `abort` | Abort a running session |
-| `diff` | Show file changes in a session |
-| `children` | List child sessions (sub-agents) |
-| `share` | Share a session and get a public URL |
-| `unshare` | Remove sharing from a session |
-| `wait-for-text` | Block until a message contains given text, then exit 0 |
-| `wait-for-idle` | Block until a session goes idle (`--require-busy` for race-free polling after `send --async`) |
-| `wait-any` | Wait for first of N sessions to go idle, output its ID |
-| `wait-all` | Wait for all N sessions to go idle, output their IDs |
-| `is-idle` | Non-blocking idle check (`--require-busy` to treat "no status entry yet" as not-idle) |
-| `summary` | Compact overview: status, todos, cost, last message snippet |
-| `worktree list` | List git worktrees |
-| `worktree create` | Create a worktree with branch and optional session |
-| `worktree remove` | Remove a worktree |
-| `worktree run` | Create worktree + session + send prompt (one-liner) |
-| `install-skill` | Install the occtl skill as an OpenCode user-level skill |
-| `view-skill` | Display the bundled SKILL.md |
-
-All commands that accept a session ID support partial matching and title search. When no ID is given, the most recent session is used.
-
-All commands support `--json` for machine-readable output.
-
-### One-Shot Runs (`occtl run`)
-
-`occtl run` packages create-session + send + wait + read into a single command. Useful for scripted batch prompts (e.g. running the same review against multiple models in parallel) where you want to keep each call self-contained:
+Create a session, send a prompt, and read the response:
 
 ```bash
-# Against the running server
-occtl run --model anthropic/claude-opus-4-7 --variant high \
-  --title "review craft" \
+SID=$(occtl create -q -t "readme smoke test")
+occtl send -s "$SID" "Say hello from this OpenCode session."
+occtl last "$SID"
+```
+
+Run a self-contained prompt and print the assistant response:
+
+```bash
+occtl run --spawn --model openai/gpt-5.4 "Summarize this repository in five bullets."
+```
+
+## Common workflows
+
+### Inspect sessions
+
+```bash
+occtl list                         # sessions for the current directory
+occtl list --all --active           # busy or retry sessions across directories
+occtl summary                       # compact status for the most recent session
+occtl messages --text-only          # readable transcript
+occtl last                          # last assistant message
+occtl diff                          # file changes made by the session
+occtl todo                          # session todo list
+```
+
+Commands that take a session ID usually accept a full ID, partial ID, title substring, or no ID. When you omit the ID, `occtl` uses the most recently updated session for the current directory.
+
+### Send work
+
+```bash
+occtl send "fix the failing tests"              # send and wait for the response
+occtl send --async "run the test suite"         # send and return immediately
+occtl send --wait "update the docs"             # send, wait until idle, and print the reply
+occtl send --stdin < prompt.md                  # read the prompt from stdin
+occtl stream "implement the parser"             # stream tool calls and text until idle
+occtl stream --json "run verification"          # newline-delimited JSON events
+```
+
+Use `stream` or `send --wait` for single-session automation. If you use `send --async` and then poll, pass `--require-busy` to `wait-for-idle`, `wait-all`, or `is-idle` so a fresh session does not appear idle before the prompt starts.
+
+### Wait for completion
+
+```bash
+occtl wait-for-idle "$SID" --timeout 600
+occtl wait-for-idle "$SID" --require-busy --timeout 600
+occtl wait-for-text "DONE" "$SID" --timeout 600
+occtl wait-any "$SID1" "$SID2" "$SID3" --timeout 600
+occtl wait-all "$SID1" "$SID2" "$SID3" --require-busy --timeout 600
+occtl is-idle "$SID" --require-busy
+```
+
+Use `wait-any` to react when the first worker finishes. Use `wait-all` as a barrier before verification, merge work, or a final report.
+
+### Handle permission requests
+
+```bash
+occtl respond "$SID" --wait --response once
+occtl respond "$SID" --wait --response always
+occtl respond "$SID" --auto-approve --wait
+```
+
+`--auto-approve` approves each pending permission request with `once`. Keep it scoped to sessions and repositories where that behavior is acceptable.
+
+### Discover models
+
+```bash
+occtl models
+occtl models --enabled
+occtl models --grep gpt
+occtl models --enabled --grep opus
+occtl models openai
+occtl models openai/gpt-5.4
+occtl models --json
+```
+
+Use `--grep` instead of piping to `grep` when you need ready-to-use model IDs such as `openai/gpt-5.4` or `openrouter/openai/gpt-5.4`.
+
+## One-shot runs
+
+`occtl run` creates a session, sends a prompt, waits for completion, fetches the last assistant message, and writes the result. It is useful for scripts, batch prompts, and review jobs where each invocation needs its own session.
+
+```bash
+occtl run --model anthropic/claude-opus-4-7 \
+  --title "review api changes" \
   --file ./prompt.md \
-  --out ./result.md \
+  --out ./review.md \
   --timeout 540000 \
-  -- "Perform the review exactly as instructed."
+  -- "Follow the review instructions exactly."
+```
 
-# With its own ephemeral opencode server (random free port, isolated state dir)
+Use `--spawn` when you want `occtl` to start and stop an ephemeral `opencode serve` process for the run:
+
+```bash
 occtl run --spawn --model openai/gpt-5.4 \
   --file ./prompt.md \
-  --out ./result.md
+  --out ./result.md \
+  --raw ./result.json \
+  --stderr ./result.err
 ```
 
 Key flags:
 
-| Flag | Notes |
-|---|---|
-| `--model <provider/model>` | Required. |
-| `--variant`, `--agent`, `--thinking` | Forwarded to the model. |
-| `-f, --file <path>` | Repeatable. Files are concatenated into the prompt; trailing positional/`--message` is appended. |
-| `-o, --out <path>` | Write assistant text to this file. Sidecar `<out>.session` always gets the session ID. |
-| `--raw <path>` | Write the full last assistant message JSON. |
-| `--stderr <path>` | Capture run-level diagnostics (timeouts, empty responses) to a file instead of stderr. |
-| `--timeout <ms>` | Abort if the session doesn't go idle in time. Exits 124 with diagnostics. |
-| `--spawn` | Spawn an ephemeral `opencode serve` on a random port, run the prompt against it, then SIGTERM/SIGKILL on exit. Inherits the user's provider config and credentials. |
-| `--spawn-port <port>` | Use a specific port instead of random (with `--spawn`). |
-| `--password <pw>` | Server password (Basic auth). Reads `OPENCODE_SERVER_PASSWORD` if unset. With `--spawn`, applied to the spawned server too. |
-| `--ephemeral` | Delete the session after a successful run. Default is to keep sessions for token-usage tracking. |
+| Flag | Description |
+| --- | --- |
+| `--model <provider/model>` | Required model ID, such as `openai/gpt-5.4`. |
+| `--variant <name>` | Model variant, such as `high`, `xhigh`, or `max`. |
+| `--agent <name>` | Agent name to pass to OpenCode. |
+| `--thinking` | Forward the thinking flag to the model. |
+| `-f, --file <path>` | Read prompt content from a file. Repeat the flag to concatenate files. |
+| `--message <text>` | Append a short prompt after any files. |
+| `-d, --dir <path>` | Create the session for another project directory. |
+| `-o, --out <path>` | Write assistant text to a file. `occtl` also writes `<path>.session` with the session ID. |
+| `--raw <path>` | Write the full last assistant message as JSON. |
+| `--stderr <path>` | Write run diagnostics to a file. |
+| `--timeout <ms>` | Abort the session if it does not become idle before the timeout. |
+| `--spawn` | Start an ephemeral OpenCode server for the run. |
+| `--spawn-port <port>` | Bind the spawned server to a specific port. |
+| `--password <pw>` | Use HTTP Basic authentication for the server password. |
+| `--ephemeral` | Delete the session after a successful run. |
 
-Exit codes: `0` success · `1` empty/no-text response or generic failure · `2` invalid arguments · `124` timeout.
+Exit codes:
 
-### Send Modes
-
-```bash
-# Default: synchronous, blocks until the agent responds
-occtl send "fix the bug"
-
-# Async: fire and forget
-occtl send --async "fix the bug"
-
-# Wait: send async, block until session idle, show result
-occtl send --wait "fix the bug"
-
-# Stream: send async, print live tool calls + text deltas until idle
-occtl stream "write 8 template files"
-occtl stream --json "..."   # NDJSON of every SSE event
-```
-
-`stream` and `send --wait` are race-free send-and-wait primitives. If you build your own polling loop with `is-idle`, `wait-for-idle`, or `wait-all` after `send --async`, pass `--require-busy` so a session that hasn't yet been marked busy doesn't report idle prematurely.
-
-### Session Defaults
-
-`occtl create --model X --agent Y --variant Z` persists those defaults to `${XDG_CONFIG_HOME:-~/.config}/occtl/sessions/<id>.json`. Subsequent `occtl send` and `occtl stream` calls read and merge them (explicit flags override stored). `occtl delete` clears the file; `occtl ls --orphans` surfaces files whose session no longer exists.
-
-```bash
-occtl create -q --model openai/gpt-5.5 --variant high
-# now `occtl send "..."` automatically uses gpt-5.5/high
-
-occtl show <id>          # session info + local defaults
-occtl ls --orphans       # defaults files with no live session
-occtl rm <id>            # delete session and its defaults file
-```
-
-### Discovering Providers, Models, and Variants
-
-```bash
-occtl models                       # list all providers and models
-occtl models --enabled             # only providers with credentials present
-occtl models --grep gpt-5.5        # print full matching provider/model IDs
-occtl models --enabled --grep opus  # search only usable configured providers
-occtl models openai                # list openai's models with their variants
-occtl models openai/gpt-5.5        # detail view: limits + variants
-occtl models --json                # raw output of /config/providers
-```
-
-Use `--grep` instead of piping to shell `grep`/`head`; it preserves provider IDs and returns ready-to-use model strings like `openai/gpt-5.5` and `openrouter/openai/gpt-5.5`.
+| Code | Meaning |
+| --- | --- |
+| `0` | Success. |
+| `1` | Empty response, lost connection, or general failure. |
+| `2` | Invalid arguments. |
+| `124` | Timeout. |
 
 ## Worktrees
 
-`occtl worktree` manages git worktrees for parallel, isolated sessions. Each worktree gets its own branch and directory under `.occtl/worktrees/`, so multiple agents can work on different features without conflicts.
+`occtl worktree` manages git worktrees under `.occtl/worktrees/<name>`. Use worktrees when parallel sessions may edit overlapping files or when you want each worker on its own branch.
 
 ```bash
-# Create a worktree with a session
-occtl wt create auth-feature
+occtl wt create auth
+occtl wt run payments "add Stripe checkout"
+occtl wt run docs --wait "rewrite the API docs"
+occtl wt list
+occtl wt remove auth
+```
 
-# Run a prompt in a new worktree (one-liner)
-occtl wt run auth-feature -w "implement JWT authentication"
+`worktree` can be shortened to `wt`.
 
-# Run 3 features in parallel
+Run independent work in parallel:
+
+```bash
 occtl wt run auth "implement JWT auth" &
 occtl wt run payments "add Stripe checkout" &
 occtl wt run dashboard "build analytics dashboard" &
 wait
-
-# List worktrees
-occtl wt ls
-
-# Clean up
-occtl wt rm auth-feature
 ```
 
-## OpenCode Skill
+Review and merge the worktree branches yourself after the workers finish.
 
-`occtl` ships with a SKILL.md that teaches OpenCode agents how to use `occtl`. Install it as a user-level skill:
+## Session defaults
+
+You can store default model settings for a session when you create it:
+
+```bash
+SID=$(occtl create -q --model openai/gpt-5.5 --variant high --agent build)
+occtl send -s "$SID" "implement the feature"
+```
+
+`occtl send` and `occtl stream` merge stored defaults with explicit flags. Explicit flags win.
+
+Defaults are stored locally under:
+
+```text
+${XDG_CONFIG_HOME:-~/.config}/occtl/sessions/<SESSION_ID>.json
+```
+
+Useful cleanup commands:
+
+```bash
+occtl show "$SID"          # session details and local defaults
+occtl list --orphans       # defaults files with no live session
+occtl rm "$SID"            # delete the session and its defaults file
+occtl rm "$SID" --keep-defaults
+```
+
+## Server configuration
+
+`occtl` tries to detect a running OpenCode server by inspecting local processes. Set environment variables when auto-detection is not enough:
+
+```bash
+export OPENCODE_SERVER_HOST=127.0.0.1
+export OPENCODE_SERVER_PORT=4096
+export OPENCODE_SERVER_PASSWORD=YOUR_SERVER_PASSWORD
+```
+
+The password is sent with HTTP Basic authentication using the `opencode` username.
+
+## Command reference
+
+| Command | Purpose |
+| --- | --- |
+| `ping` | Check that an OpenCode server is reachable. |
+| `list`, `ls` | List sessions for the current directory, another directory, or all directories. |
+| `create`, `new` | Create a session and optionally store model defaults. |
+| `delete`, `rm` | Delete a session and remove its stored defaults. |
+| `get`, `show` | Show session details and stored defaults. |
+| `messages`, `msgs` | List session messages. |
+| `last` | Print the last message, usually as text. |
+| `status` | Show idle, busy, and retry status. |
+| `watch` | Watch real-time session events. |
+| `send`, `prompt` | Send a message to a session. |
+| `stream` | Send a message and stream events until the session becomes idle. |
+| `run` | Run a one-shot prompt in a new session. |
+| `respond` | Respond to permission requests. |
+| `models` | List providers, models, and variants from OpenCode configuration. |
+| `todo` | Show the session todo list. |
+| `abort` | Stop a running session. |
+| `diff` | Show file changes for a session. |
+| `children` | List child sessions. |
+| `share` | Share a session and print the public URL. |
+| `unshare` | Remove public sharing from a session. |
+| `wait-for-text` | Wait until a message contains specific text. |
+| `wait-for-idle` | Wait until one session becomes idle. |
+| `wait-any` | Wait until the first of multiple sessions becomes idle. |
+| `wait-all` | Wait until all listed sessions become idle. |
+| `is-idle` | Check idle state without blocking. |
+| `summary` | Print status, todo progress, cost, and the latest output snippet. |
+| `worktree`, `wt` | Manage git worktrees for isolated sessions. |
+| `install-skill` | Install the bundled `occtl` skill for OpenCode-compatible agents. |
+| `view-skill` | Print or locate the bundled `SKILL.md`. |
+
+Run command-specific help for exact flags:
+
+```bash
+occtl help send
+occtl help run
+occtl help wt run
+```
+
+Most inspection and automation commands support `--json` for scripts.
+
+## Agent orchestration examples
+
+### Watch a session while you are away
+
+Start a second session and ask it to supervise another session:
+
+```text
+Session ses_abc123 is working on a refactor. When it finishes, use occtl to ask it to create a pull request. Then monitor the CI pipeline. If CI fails, read the logs and send the session a prompt to fix the failures. Continue until CI passes.
+```
+
+The supervisory agent can use:
+
+```bash
+occtl wait-for-idle ses_abc123
+occtl send -w -s ses_abc123 "create a pull request for this work"
+occtl last ses_abc123
+occtl send -w -s ses_abc123 "CI failed with this log. Fix it: ..."
+```
+
+### Review another session
+
+```bash
+DONE=$(occtl wait-any "$SID1" "$SID2" "$SID3")
+occtl diff "$DONE" > /tmp/session.diff
+REVIEW=$(occtl create -q -t "review $DONE")
+occtl send -s "$REVIEW" --stdin < /tmp/session.diff
+```
+
+### Coordinate multiple repositories
+
+```bash
+API=$(occtl create -q -d /path/to/backend -t "users api")
+WEB=$(occtl create -q -d /path/to/frontend -t "users client")
+
+occtl send --async -s "$API" "Implement the /users endpoints."
+occtl send --async -s "$WEB" "Implement the users API client."
+
+occtl wait-all "$API" "$WEB" --require-busy
+occtl summary "$API"
+occtl summary "$WEB"
+```
+
+## OpenCode skill
+
+`occtl` ships with a `SKILL.md` that teaches OpenCode-compatible agents how to use the CLI for session inspection, Ralph Loop workflows, permission handling, and worktree orchestration.
+
+Install it as a user-level skill:
 
 ```bash
 occtl install-skill
 ```
 
-This copies the skill to `~/.config/opencode/skills/occtl/` and any other found user-level skill directories, such as `~/.claude/skills/occtl/` or `~/.agents/skills/occtl/`. Restart OpenCode to pick it up. The skill includes a compact command reference, Ralph Loop workflow, and worktree patterns.
-
-To view the skill without installing:
+View the bundled skill without installing it:
 
 ```bash
 occtl view-skill
+occtl view-skill --path
 ```
 
-## Ralph Mode
+## Support and status
 
-The [Ralph Loop](https://ghuntley.com/ralph/) is an autonomous coding pattern where an AI agent works through tasks in a loop with fresh context each iteration. Traditionally this requires a bash script to drive the loop.
+`occtl` is published as [`@colinmollenhour/occtl`](https://www.npmjs.com/package/@colinmollenhour/occtl) and targets Node.js 20 or later.
 
-`occtl` eliminates the bash script entirely. With Ralph Mode, **the agent IS the orchestrator**. It creates sessions, sends prompts, monitors progress, handles failures, and keeps iterating — all through `occtl` commands. No bash wrapper needed.
+Report problems in [GitHub issues](https://github.com/colinmollenhour/occtl/issues). Include the `occtl --version` output, the command you ran, and whether you are using a running OpenCode server or `occtl run --spawn`.
 
-To start: tell your agent "Use the occtl skill to complete project X using Ralph Mode." The skill teaches the agent to:
+## Develop
 
-1. Break work into atomic tasks (`tasks.md`)
-2. Create a fresh session per task (`occtl create`)
-3. Send the worker a prompt with context (`occtl send --async`)
-4. Wait for completion (`occtl wait-for-idle`)
-5. Evaluate output (`occtl summary`, `occtl last`)
-6. Repeat until all tasks are done
-
-### Parallel Execution
+Install dependencies and build the CLI:
 
 ```bash
-# Agent creates 3 sessions for independent tasks
-SID1=$(occtl create -q -t "task-auth")
-SID2=$(occtl create -q -t "task-payments")
-SID3=$(occtl create -q -t "task-dashboard")
-
-# Sends prompts to all three
-occtl send --async "implement JWT auth..." -s $SID1
-occtl send --async "add Stripe checkout..." -s $SID2
-occtl send --async "build dashboard..." -s $SID3
-
-# Waits for first to finish, evaluates, dispatches next
-DONE=$(occtl wait-any $SID1 $SID2 $SID3)
-occtl summary $DONE
+npm install
+npm run build
 ```
 
-For conflicting work, use worktrees:
+Run the TypeScript source during development:
 
 ```bash
-occtl wt run auth -w "implement JWT auth"
-occtl wt run payments -w "add Stripe checkout"
+npm run dev -- --help
 ```
 
-See `occtl view-skill` for the compact Ralph Mode guide.
-
-### Model Recommendations
-
-The orchestrating agent doesn't write code — it just runs `occtl` commands and makes decisions. Use a cheap, fast model for the orchestrator and a capable model for the workers:
-
-- **Orchestrator:** Sonnet, Flash, GPT-4o-mini (cheap, fast)
-- **Workers:** Opus, Pro, o3 (capable, thorough)
+Publish flow for maintainers:
 
 ```bash
-# Specify the worker model when sending prompts
-occtl send --async --model anthropic/claude-opus-4-6 "implement feature X" -s $SID
+npm version patch
+git push
+git push --tags
+gh release create vX.Y.Z --generate-notes
 ```
 
-## Use Cases
-
-### Handoff: "Watch my session while I sleep"
-
-You're working in a normal OpenCode session — maybe a big refactor that's halfway done. You want to go to bed but keep things moving. Start a second session and tell it to babysit the first:
-
-> "The session ses_abc123 is working on a refactor. When it finishes, use occtl to have it create a pull request, then monitor the CI pipeline. If the pipeline fails, read the failure logs and send the session a prompt to fix the issues. Keep going until the pipeline passes."
-
-The supervisory agent uses:
-- `occtl wait-for-idle ses_abc123` — block until the worker finishes
-- `occtl send -w "create a PR for this work" -s ses_abc123` — tell it to make a PR
-- `occtl last ses_abc123` — read the PR URL from its output
-- `occtl send -w "the CI pipeline failed with: ... fix it" -s ses_abc123` — feed it failures
-- Loop until the pipeline is green
-
-You come back in the morning to a merged PR.
-
-### PR Review Bot
-
-A session can review another session's work:
-
-> "Use occtl to watch for any session in this project that goes idle. When one does, read its diff and last message. If it made code changes, create a new session to review the changes and post review comments."
-
-- `occtl list --json` — find active sessions
-- `occtl wait-any <ids...>` — wait for any to finish
-- `occtl wait-all <ids...>` — wait for every worker before final verification/reporting
-- `occtl diff <id>` — see what files changed
-- `occtl create` + `occtl send` — start a review session with the diff as context
-
-### Parallel Test Matrix
-
-Run the same change against different test configurations:
-
-> "Create 3 worktrees. In each one, send a session to run the test suite with a different Node version (18, 20, 22). Wait for all three to finish and report which ones passed."
-
-- `occtl wt create node18` / `node20` / `node22`
-- `occtl send --async` to each with the appropriate test command
-- `occtl wait-all <ids...> --require-busy` to wait until all three are idle
-- `occtl summary` each to check results
-
-### Continuous Integration Helper
-
-Wire `occtl` into your CI pipeline to have an agent fix failures:
-
-```bash
-# In CI, after a failure:
-SID=$(occtl create -q -t "ci-fix-$(date +%s)")
-occtl send -w "The CI build failed. Here's the log: $(cat ci-output.log)
-Fix the issues and commit." -s $SID
-```
-
-### Cross-Project Coordination
-
-Orchestrate work across separate codebases from a single agent:
-
-> "Implement the new /users API in the backend, and simultaneously build the API client in the frontend. When both are done, verify they work together."
-
-```bash
-# Sessions in different projects
-API=$(occtl create -q -d /path/to/backend -t "users API")
-CLIENT=$(occtl create -q -d /path/to/frontend -t "users client")
-
-# Work in parallel
-occtl send --async "implement /users endpoints" -s $API
-occtl send --async "implement users API client" -s $CLIENT
-
-# Wait for both before integration verification
-occtl wait-all $API $CLIENT --require-busy
-occtl summary $API
-occtl summary $CLIENT
-```
-
-Works because one OpenCode server manages sessions across directories. Useful for API + client, library + consumers, or monorepo coordination.
-
-### Session Migration
-
-Move context from one session to another when a session gets too large:
-
-> "Read the last 5 messages from ses_old using occtl, create a fresh session, and send it a summary of the prior work so it can continue."
-
-- `occtl messages ses_old --limit 5 --text-only` — extract recent context
-- `occtl create -q` — fresh session
-- `occtl send --async "Continue the work. Here's what was done: ..."` — seed the new session
-
-## Why Not Just Use opencode CLI?
-
-The `opencode` CLI provides `session list` and `session delete`. Everything else in `occtl` is additive:
-
-- **Read messages** from any session
-- **Watch** sessions in real-time via SSE
-- **Send prompts** programmatically (sync, async, or wait-for-idle)
-- **One-shot runs** with `occtl run`, optionally spawning an ephemeral server (`--spawn`)
-- **Respond** to permission requests (including continuous auto-approve)
-- **Wait for text** in agent output (event-driven, not polling)
-- **Create** sessions for fresh-context workflows
-- **Worktrees** for parallel, isolated agent execution
-- **Share/unshare** sessions
-- **Inspect** todos, diffs, children, and status
+The `Publish to npm` GitHub Action publishes package releases to npm with provenance.
 
 ## License
 
 MIT
-
-## How to Publish
-
-```sh
-npm version patch     # or minor / major
-git push && git push --tags
-gh release create vX.Y.Z --generate-notes
-```
-
-The `Publish to npm` GitHub Action fires on the release and pushes to npm with provenance.
