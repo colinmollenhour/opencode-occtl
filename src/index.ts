@@ -4,6 +4,14 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { Command } from "commander";
+import {
+  EnvHttpProxyAgent,
+  Headers as UndiciHeaders,
+  Request as UndiciRequest,
+  Response as UndiciResponse,
+  fetch as undiciFetch,
+  setGlobalDispatcher,
+} from "undici";
 import { setServer } from "./client.js";
 import { pingCommand } from "./commands/ping.js";
 import { sessionListCommand } from "./commands/session-list.js";
@@ -39,6 +47,21 @@ import {
   worktreeRunCommand,
 } from "./commands/worktree.js";
 import { installSkillCommand, viewSkillCommand } from "./commands/skill.js";
+
+if (
+  process.env.HTTP_PROXY ||
+  process.env.HTTPS_PROXY ||
+  process.env.http_proxy ||
+  process.env.https_proxy
+) {
+  setGlobalDispatcher(new EnvHttpProxyAgent());
+  // Node's built-in fetch does not use userland undici's dispatcher, so swap
+  // the fetch globals to the configured undici implementation when proxying.
+  globalThis.fetch = undiciFetch as unknown as typeof globalThis.fetch;
+  globalThis.Headers = UndiciHeaders as unknown as typeof globalThis.Headers;
+  globalThis.Request = UndiciRequest as unknown as typeof globalThis.Request;
+  globalThis.Response = UndiciResponse as unknown as typeof globalThis.Response;
+}
 
 const pkg = JSON.parse(
   readFileSync(

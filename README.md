@@ -241,6 +241,8 @@ export OPENCODE_SERVER_PASSWORD=YOUR_SERVER_PASSWORD
 
 The password is sent with HTTP Basic authentication using the `opencode` username.
 
+When `HTTP_PROXY`, `HTTPS_PROXY`, `http_proxy`, or `https_proxy` is set, occtl routes its HTTP/SSE requests through that proxy. `NO_PROXY` / `no_proxy` is honored by the underlying HTTP client.
+
 ## Command reference
 
 | Command | Purpose |

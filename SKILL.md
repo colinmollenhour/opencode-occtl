@@ -9,7 +9,7 @@ description: Manage OpenCode sessions from the CLI using occtl. Use when the use
 
 ## Basics
 
-Prereq: OpenCode server running. If discovery fails, set `OPENCODE_SERVER_HOST` and `OPENCODE_SERVER_PORT`.
+Prereq: OpenCode server running. If discovery fails, set `OPENCODE_SERVER_HOST` and `OPENCODE_SERVER_PORT`. Standard proxy env vars (`HTTP_PROXY` / `HTTPS_PROXY` plus `NO_PROXY`) are honored.
 
 Session IDs can be omitted (most recent), full IDs, partial IDs, or title substrings.
 
